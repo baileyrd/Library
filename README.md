@@ -1,14 +1,23 @@
 # library
 
-A personal command-line tool that inventories ebooks you own across Humble
-Bundle, Packt, Manning, Kindle (via CSV import), and manually-entered
-sources, storing everything in a local SQLite database — so you can check
-for duplicates before buying a book you already have.
+A personal tool that inventories ebooks you own across Humble Bundle, Packt,
+Manning, Kindle (via CSV import), and manually-entered sources, storing
+everything in a local SQLite database — so you can check for duplicates
+before buying a book you already have.
 
-## Building
+This is a Cargo workspace with three crates:
+
+- `core/` (`library-core`) — the shared logic: database, dedup matching,
+  config, and per-source fetching/parsing. Everything below is a thin shell
+  around this crate.
+- `cli/` (`library`) — the command-line interface, documented below.
+- `desktop/` (`library-desktop`) — a native desktop app (Tauri) covering the
+  same functionality with a GUI. See [`desktop/README.md`](desktop/README.md).
+
+## Building the CLI
 
 ```
-cargo build --release
+cargo build --release -p library
 ```
 
 The binary is written to `target/release/library`.

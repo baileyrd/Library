@@ -1,4 +1,5 @@
 use regex::Regex;
+use serde::Serialize;
 
 use crate::model::Book;
 
@@ -41,7 +42,7 @@ fn normalize_isbn(isbn: &str) -> String {
     isbn.chars().filter(|c| c.is_ascii_digit()).collect()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DedupMatch {
     pub book: Book,
     pub confidence: f64,

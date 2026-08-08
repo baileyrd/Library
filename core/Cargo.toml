@@ -1,0 +1,25 @@
+[package]
+name = "library-core"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "library_core"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+csv.workspace = true
+dirs.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+rusqlite.workspace = true
+scraper.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strsim.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"

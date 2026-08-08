@@ -157,6 +157,41 @@ impl Db {
         rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
     }
 
+    pub fn get_book(&self, id: i64) -> Result<Option<Book>> {
+        self.conn
+            .query_row(
+                "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json
+                 FROM books WHERE id = ?1",
+                params![id],
+                row_to_book,
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Updates title/authors/isbn/formats in place, keeping the row's id,
+    /// source, source_id, acquired_at and raw_json untouched -- used by the
+    /// desktop app's edit form, where re-running the source/source_id-keyed
+    /// `upsert_book` logic would be the wrong tool (edits aren't re-imports).
+    pub fn update_book(
+        &self,
+        id: i64,
+        title: &str,
+        authors: &[String],
+        isbn: Option<&str>,
+        formats: &[String],
+    ) -> Result<bool> {
+        let normalized = normalize_title(title);
+        let authors_joined = authors.join(", ");
+        let formats_joined = formats.join(",");
+        let affected = self.conn.execute(
+            "UPDATE books SET title = ?1, normalized_title = ?2, authors = ?3, isbn = ?4, formats = ?5
+             WHERE id = ?6",
+            params![title, normalized, authors_joined, isbn, formats_joined, id],
+        )?;
+        Ok(affected > 0)
+    }
+
     pub fn delete_book(&self, id: i64) -> Result<bool> {
         let affected = self.conn.execute("DELETE FROM books WHERE id = ?1", params![id])?;
         Ok(affected > 0)
@@ -322,6 +357,45 @@ mod tests {
         assert_eq!(stats.len(), 2);
         let humble_count = stats.iter().find(|(s, _)| *s == Source::HumbleBundle).unwrap().1;
         assert_eq!(humble_count, 2);
+    }
+
+    #[test]
+    fn get_book_returns_none_for_missing_id() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(db.get_book(999).unwrap().is_none());
+    }
+
+    #[test]
+    fn update_book_changes_fields_and_keeps_source_id() {
+        let db = Db::open_in_memory().unwrap();
+        db.upsert_book(&sample_book("Book A", Source::HumbleBundle, Some("a")))
+            .unwrap();
+        let id = db.all_books().unwrap()[0].id.unwrap();
+
+        let changed = db
+            .update_book(
+                id,
+                "Book A (Revised)",
+                &["New Author".to_string()],
+                Some("9780000000000"),
+                &["mobi".to_string()],
+            )
+            .unwrap();
+        assert!(changed);
+
+        let updated = db.get_book(id).unwrap().unwrap();
+        assert_eq!(updated.title, "Book A (Revised)");
+        assert_eq!(updated.authors, vec!["New Author".to_string()]);
+        assert_eq!(updated.isbn, Some("9780000000000".to_string()));
+        assert_eq!(updated.formats, vec!["mobi".to_string()]);
+        assert_eq!(updated.source, Source::HumbleBundle);
+        assert_eq!(updated.source_id, Some("a".to_string()));
+    }
+
+    #[test]
+    fn update_book_returns_false_for_missing_id() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(!db.update_book(999, "X", &[], None, &[]).unwrap());
     }
 
     #[test]

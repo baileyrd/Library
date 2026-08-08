@@ -1,0 +1,14 @@
+[package]
+name = "library"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "library"
+path = "src/main.rs"
+
+[dependencies]
+library-core = { path = "../core" }
+anyhow.workspace = true
+clap = { version = "4.6.6", features = ["derive"] }
+serde_json.workspace = true

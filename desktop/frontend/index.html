@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Library</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Library</h1>
+      <nav class="tabs">
+        <button class="tab-btn active" data-view="books">Books</button>
+        <button class="tab-btn" data-view="check">Check before buying</button>
+        <button class="tab-btn" data-view="import">Import</button>
+        <button class="tab-btn" data-view="settings">Settings</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="view-books" class="view active">
+        <div class="toolbar">
+          <select id="source-filter">
+            <option value="">All sources</option>
+            <option value="humble_bundle">Humble Bundle</option>
+            <option value="packt">Packt</option>
+            <option value="manning">Manning</option>
+            <option value="kindle">Kindle</option>
+            <option value="manual">Manual</option>
+          </select>
+          <span id="stats-line" class="stats-line"></span>
+          <button id="add-book-btn" class="primary">+ Add book</button>
+        </div>
+        <table class="book-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Authors</th>
+              <th>Source</th>
+              <th>Formats</th>
+              <th>ISBN</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="book-rows"></tbody>
+        </table>
+        <p id="books-empty" class="empty hidden">No books yet. Add one or import from a source.</p>
+      </section>
+
+      <section id="view-check" class="view">
+        <h2>Check before buying</h2>
+        <p class="hint">Search by title or ISBN to see if you already own it.</p>
+        <div class="toolbar">
+          <input id="check-query" type="text" placeholder="Title or ISBN..." />
+          <button id="check-btn" class="primary">Check</button>
+        </div>
+        <div id="check-results"></div>
+      </section>
+
+      <section id="view-import" class="view">
+        <h2>Import</h2>
+        <div class="import-row">
+          <div class="import-card">
+            <h3>Humble Bundle</h3>
+            <p class="hint">Uses the cookie configured in Settings.</p>
+            <button data-source="humble" class="import-btn">Import</button>
+          </div>
+          <div class="import-card">
+            <h3>Packt</h3>
+            <p class="hint">Uses the token configured in Settings.</p>
+            <button data-source="packt" class="import-btn">Import</button>
+          </div>
+          <div class="import-card">
+            <h3>Manning</h3>
+            <p class="hint">Uses the cookies configured in Settings.</p>
+            <button data-source="manning" class="import-btn">Import</button>
+          </div>
+          <div class="import-card">
+            <h3>Kindle (CSV)</h3>
+            <p class="hint">Columns: title,authors,isbn,formats</p>
+            <input id="kindle-path" type="text" placeholder="/path/to/kindle.csv" />
+            <button data-source="kindle" class="import-btn">Import</button>
+          </div>
+        </div>
+        <div id="import-results"></div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <h2>Settings</h2>
+        <p class="hint">Credentials are read from your own logged-in browser session. See the project README for how to obtain each one. Stored locally, never sent anywhere except the source's own site.</p>
+        <div class="settings-grid">
+          <label>
+            Humble Bundle cookie (<code>_simpleauth_sess</code>)
+            <span id="status-humble" class="status-pill"></span>
+            <input id="cred-humble" type="password" placeholder="paste cookie value" />
+          </label>
+          <label>
+            Packt bearer token
+            <span id="status-packt" class="status-pill"></span>
+            <input id="cred-packt" type="password" placeholder="paste token" />
+          </label>
+          <label>
+            Manning cookie jar
+            <span id="status-manning" class="status-pill"></span>
+            <input id="cred-manning" type="password" placeholder="paste cookie jar string" />
+          </label>
+        </div>
+        <button id="save-settings-btn" class="primary">Save</button>
+        <p id="settings-status" class="hint"></p>
+        <p class="hint db-path">Database: <code id="db-path"></code></p>
+      </section>
+    </main>
+  </div>
+
+  <div id="book-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="book-modal-title">Add book</h3>
+      <label>Title <input id="field-title" type="text" /></label>
+      <label>Authors (comma-separated) <input id="field-authors" type="text" /></label>
+      <label>ISBN <input id="field-isbn" type="text" /></label>
+      <label>Formats (comma-separated) <input id="field-formats" type="text" /></label>
+      <div id="modal-warnings"></div>
+      <div class="modal-actions">
+        <button id="modal-cancel">Cancel</button>
+        <button id="modal-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

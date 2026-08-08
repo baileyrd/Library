@@ -1,18 +1,15 @@
 mod cli;
-mod config;
-mod db;
-mod dedup;
-mod model;
-mod sources;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 
 use cli::{Cli, Command, ConfigAction, ImportSource};
-use config::Config;
-use db::{Db, UpsertOutcome};
-use model::{Book, Source};
-use sources::Source as SourceFetcher;
+use library_core::config::Config;
+use library_core::db::{Db, UpsertOutcome};
+use library_core::model::{Book, Source};
+use library_core::sources;
+use library_core::sources::Source as SourceFetcher;
+use library_core::dedup;
 
 /// Fuzzy matches below this confidence, but at or above this one, are shown
 /// separately in `check` output as weaker, manually-reviewed candidates.
