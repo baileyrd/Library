@@ -25,7 +25,8 @@ pub fn normalize_title(title: &str) -> String {
     let parenthetical_year = Regex::new(r"\(\s*(19|20)\d{2}\s*\)").unwrap();
     let without_year = parenthetical_year.replace_all(&without_edition, "");
 
-    let publisher_suffix = Regex::new(r"\s*[-:]\s*(o'reilly|packt|manning|apress|no starch press)\s*$").unwrap();
+    let publisher_suffix =
+        Regex::new(r"\s*[-:]\s*(o'reilly|packt|manning|apress|no starch press)\s*$").unwrap();
     let without_publisher = publisher_suffix.replace_all(&without_year, "");
 
     let punctuation = Regex::new(r"[^\w\s]").unwrap();
@@ -78,7 +79,9 @@ pub fn find_duplicates_with_threshold(
             }
         }
 
-        if !candidate_normalized_title.is_empty() && candidate_normalized_title == book_normalized_title {
+        if !candidate_normalized_title.is_empty()
+            && candidate_normalized_title == book_normalized_title
+        {
             matches.push(DedupMatch {
                 book: book.clone(),
                 confidence: 0.95,
@@ -155,8 +158,16 @@ mod tests {
 
     #[test]
     fn find_duplicates_isbn_exact_match() {
-        let existing = vec![book("Rust in Action", Some("978-1-6172-9455-4"), Source::HumbleBundle)];
-        let candidate = book("A Completely Different Title", Some("9781617294554"), Source::Packt);
+        let existing = vec![book(
+            "Rust in Action",
+            Some("978-1-6172-9455-4"),
+            Source::HumbleBundle,
+        )];
+        let candidate = book(
+            "A Completely Different Title",
+            Some("9781617294554"),
+            Source::Packt,
+        );
         let matches = find_duplicates(&existing, &candidate);
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].confidence, 1.0);
@@ -165,7 +176,11 @@ mod tests {
 
     #[test]
     fn find_duplicates_exact_title_match() {
-        let existing = vec![book("The Rust Programming Language", None, Source::HumbleBundle)];
+        let existing = vec![book(
+            "The Rust Programming Language",
+            None,
+            Source::HumbleBundle,
+        )];
         let candidate = book("Rust Programming Language", None, Source::Packt);
         let matches = find_duplicates(&existing, &candidate);
         assert_eq!(matches.len(), 1);

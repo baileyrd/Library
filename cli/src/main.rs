@@ -6,10 +6,10 @@ use clap::Parser;
 use cli::{Cli, Command, ConfigAction, ImportSource};
 use library_core::config::Config;
 use library_core::db::{Db, UpsertOutcome};
+use library_core::dedup;
 use library_core::model::{Book, Source};
 use library_core::sources;
 use library_core::sources::Source as SourceFetcher;
-use library_core::dedup;
 
 /// Fuzzy matches below this confidence, but at or above this one, are shown
 /// separately in `check` output as weaker, manually-reviewed candidates.
@@ -34,7 +34,12 @@ fn run() -> Result<()> {
 
     match cli.command {
         Command::Import { source } => handle_import(&db, &config, source, cli.verbose),
-        Command::Add { title, author, isbn, format } => handle_add(&db, title, author, isbn, format),
+        Command::Add {
+            title,
+            author,
+            isbn,
+            format,
+        } => handle_add(&db, title, author, isbn, format),
         Command::List { source, json } => handle_list(&db, source, json),
         Command::Check { query } => handle_check(&db, &query),
         Command::Stats => handle_stats(&db),
@@ -55,7 +60,9 @@ fn handle_import(db: &Db, config: &Config, source: ImportSource, verbose: bool) 
         }
         ImportSource::Packt => {
             let token = config.packt_token.clone().ok_or_else(|| {
-                anyhow::anyhow!("no Packt token configured. Run: library config set --packt-token <value>")
+                anyhow::anyhow!(
+                    "no Packt token configured. Run: library config set --packt-token <value>"
+                )
             })?;
             Box::new(sources::packt::Packt { token })
         }
@@ -78,7 +85,9 @@ fn handle_import(db: &Db, config: &Config, source: ImportSource, verbose: bool) 
 }
 
 fn run_import(db: &Db, source_name: &str, books: Vec<Book>) -> Result<()> {
-    let baseline = db.all_books().context("failed to load existing books for dedup check")?;
+    let baseline = db
+        .all_books()
+        .context("failed to load existing books for dedup check")?;
 
     let mut new_count = 0;
     let mut updated_count = 0;
@@ -126,7 +135,9 @@ fn handle_add(
 ) -> Result<()> {
     let book = sources::manual::build_manual_book(title, authors, isbn, formats);
 
-    let existing = db.all_books().context("failed to load existing books for dedup check")?;
+    let existing = db
+        .all_books()
+        .context("failed to load existing books for dedup check")?;
     for m in dedup::find_duplicates(&existing, &book) {
         println!(
             "\u{26a0} possible duplicate of '{}' from {} (confidence {:.2}, reason: {})",
@@ -156,7 +167,10 @@ fn handle_list(db: &Db, source: Option<String>, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<6} {:<50} {:<14} {:<20} {}", "ID", "TITLE", "SOURCE", "AUTHORS", "FORMATS");
+    println!(
+        "{:<6} {:<50} {:<14} {:<20} FORMATS",
+        "ID", "TITLE", "SOURCE", "AUTHORS"
+    );
     for book in &books {
         let id = book.id.map(|i| i.to_string()).unwrap_or_default();
         let authors = book.authors.join(", ");
@@ -202,7 +216,8 @@ fn handle_check(db: &Db, query: &str) -> Result<()> {
     };
 
     let existing = db.all_books().context("failed to load existing books")?;
-    let matches = dedup::find_duplicates_with_threshold(&existing, &candidate, CHECK_WEAK_THRESHOLD);
+    let matches =
+        dedup::find_duplicates_with_threshold(&existing, &candidate, CHECK_WEAK_THRESHOLD);
 
     let (strong, weak): (Vec<_>, Vec<_>) = matches.into_iter().partition(|m| m.confidence >= 0.90);
 
@@ -251,7 +266,11 @@ fn handle_stats(db: &Db) -> Result<()> {
 }
 
 fn handle_config(action: ConfigAction) -> Result<()> {
-    let ConfigAction::Set { humble_cookie, packt_token, manning_cookies } = action;
+    let ConfigAction::Set {
+        humble_cookie,
+        packt_token,
+        manning_cookies,
+    } = action;
 
     if humble_cookie.is_none() && packt_token.is_none() && manning_cookies.is_none() {
         bail!("nothing to set: pass at least one of --humble-cookie, --packt-token, --manning-cookies");
@@ -274,7 +293,10 @@ fn handle_config(action: ConfigAction) -> Result<()> {
     }
 
     config.save()?;
-    println!("updated: {} (file permissions set to 0600)", changed.join(", "));
+    println!(
+        "updated: {} (file permissions set to 0600)",
+        changed.join(", ")
+    );
     Ok(())
 }
 

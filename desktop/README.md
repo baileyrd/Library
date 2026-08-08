@@ -4,9 +4,9 @@ A native desktop app (Tauri) for the `library` book inventory: browse/search you
 library, add/edit/remove books, run imports, and manage source credentials — all
 from a window instead of the command line.
 
-It shares the same SQLite database and config file as the `library` CLI
-(`crates/core`, aka `library-core`), so the two are interchangeable — import
-from the CLI, browse in the app, or vice versa.
+It shares the same SQLite database and config file as the `library` CLI, via
+the common `core/` crate (`library-core`), so the two are interchangeable —
+import from the CLI, browse in the app, or vice versa.
 
 ## Running it
 
@@ -36,7 +36,7 @@ For a hot-reloading dev loop or to build installers (`.deb`/`.AppImage`/`.dmg`/
 ```
 cargo install tauri-cli --version "^2"
 cargo tauri dev      # hot reload (frontend is static, so this mainly matters for Rust changes)
-cargo tauri build     # produces an installer/bundle under desktop/src-tauri/target/release/bundle/
+cargo tauri build     # produces an installer/bundle under target/release/bundle/ (repo root — this is a Cargo workspace, so target/ is shared, not per-crate)
 ```
 
 ## What it can do
@@ -46,7 +46,8 @@ cargo tauri build     # produces an installer/bundle under desktop/src-tauri/tar
 - **Check before buying**: search by title or ISBN before you buy — same
   duplicate-detection logic as `library check` on the CLI.
 - **Import tab**: trigger `import humble` / `import packt` / `import manning`
-  (using credentials from Settings) or `import kindle` (pick a CSV file path).
+  (using credentials from Settings) or `import kindle` (type/paste the path to
+  a CSV file — there's no native file-picker dialog yet, just a text field).
 - **Settings tab**: set/update the Humble Bundle cookie, Packt token, and
   Manning cookie jar — same config file the CLI reads
   (`~/.config/library-inventory/config.toml`, `0600` permissions). See the
