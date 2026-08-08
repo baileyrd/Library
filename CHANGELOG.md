@@ -19,6 +19,12 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
 - CI workflow (fmt + clippy + test, gated on the whole workspace) and
   standard repo governance docs (this file, RELEASE_NOTES, ARCHITECTURE,
   CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, PR/issue templates, ADR log).
+- Desktop app: "Sign in automatically" per source in Settings — opens an
+  embedded login window on the source's own site and captures the resulting
+  session/token straight into config once you log in, instead of requiring
+  devtools cookie-hunting (`core/src/sources/capture.rs`,
+  `desktop/src-tauri/src/commands.rs::capture_credential`). Manual paste
+  remains available as a fallback.
 
 ### Changed
 ### Fixed

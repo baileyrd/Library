@@ -48,10 +48,12 @@ cargo tauri build     # produces an installer/bundle under target/release/bundle
 - **Import tab**: trigger `import humble` / `import packt` / `import manning`
   (using credentials from Settings) or `import kindle` (type/paste the path to
   a CSV file — there's no native file-picker dialog yet, just a text field).
-- **Settings tab**: set/update the Humble Bundle cookie, Packt token, and
-  Manning cookie jar — same config file the CLI reads
-  (`~/.config/library-inventory/config.toml`, `0600` permissions). See the
-  root README for how to obtain each one from your browser.
+- **Settings tab**: click "Sign in automatically" next to a source to open a
+  real embedded login window and capture its session as soon as you log
+  in — no devtools. Manual paste (Humble Bundle cookie, Packt token, Manning
+  cookie jar) still works as a fallback. Either way it's the same config
+  file the CLI reads (`~/.config/library-inventory/config.toml`, `0600`
+  permissions). See the root README for the manual/devtools instructions.
 
 ## Notes
 

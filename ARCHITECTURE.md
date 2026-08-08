@@ -19,6 +19,7 @@ it — neither has its own copy of the matching or storage logic.
 | Port | Adapter(s) | Notes |
 | ---- | ---------- | ----- |
 | `sources::Source` (fetch a source's owned books) | `humble::Humble`, `packt::Packt`, `manning::Manning`, `kindle::Kindle` | Live HTTP fetch (Humble/Packt/Manning, cookie or token supplied by the user) vs. local CSV import (Kindle — see below). All return the same `Vec<Book>`. |
+| `sources::capture::CaptureSpec` (assemble a credential from an embedded login window's cookie jar) | `desktop/src-tauri` only (the only crate with a webview) | Core owns *what* to look for (which cookie, or the header-sniff/manual-confirm signal) and how to assemble the config value; the desktop crate owns the actual window/webview and polling loop. No CLI adapter — see the manual `config set` fallback in the README instead. |
 | `Db` (storage) | `rusqlite`-backed SQLite, single file | No trait abstraction here — SQLite is the only storage backend and isn't expected to change. |
 | Frontend | `cli` (clap), `desktop` (Tauri + vanilla JS) | Both call directly into `library-core`'s public API (`Db`, `dedup`, `sources`, `config`) — no shared "app service" layer between them, since neither has enough independent logic to justify one yet. |
 

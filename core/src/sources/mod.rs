@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod humble;
 pub mod kindle;
 pub mod manning;

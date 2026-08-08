@@ -24,6 +24,7 @@ pub fn run() {
             commands::get_config_status,
             commands::set_credential,
             commands::import_source,
+            commands::capture_credential,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

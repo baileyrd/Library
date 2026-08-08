@@ -87,25 +87,31 @@
 
       <section id="view-settings" class="view">
         <h2>Settings</h2>
-        <p class="hint">Credentials are read from your own logged-in browser session. See the project README for how to obtain each one. Stored locally, never sent anywhere except the source's own site.</p>
+        <p class="hint">Click "Sign in" to open a real login window and capture the session automatically -- no devtools required. Manual paste (see README) still works as a fallback. Stored locally, never sent anywhere except the source's own site.</p>
         <div class="settings-grid">
-          <label>
-            Humble Bundle cookie (<code>_simpleauth_sess</code>)
-            <span id="status-humble" class="status-pill"></span>
-            <input id="cred-humble" type="password" placeholder="paste cookie value" />
-          </label>
-          <label>
-            Packt bearer token
-            <span id="status-packt" class="status-pill"></span>
-            <input id="cred-packt" type="password" placeholder="paste token" />
-          </label>
-          <label>
-            Manning cookie jar
-            <span id="status-manning" class="status-pill"></span>
-            <input id="cred-manning" type="password" placeholder="paste cookie jar string" />
-          </label>
+          <div class="cred-row">
+            <div class="cred-label">Humble Bundle <span id="status-humble" class="status-pill"></span></div>
+            <div class="cred-actions">
+              <button data-capture="humble_bundle" class="capture-btn">Sign in automatically</button>
+              <input id="cred-humble" type="password" placeholder="or paste _simpleauth_sess cookie" />
+            </div>
+          </div>
+          <div class="cred-row">
+            <div class="cred-label">Packt <span id="status-packt" class="status-pill"></span></div>
+            <div class="cred-actions">
+              <button data-capture="packt" class="capture-btn">Sign in automatically</button>
+              <input id="cred-packt" type="password" placeholder="or paste bearer token" />
+            </div>
+          </div>
+          <div class="cred-row">
+            <div class="cred-label">Manning <span id="status-manning" class="status-pill"></span></div>
+            <div class="cred-actions">
+              <button data-capture="manning" class="capture-btn">Sign in automatically</button>
+              <input id="cred-manning" type="password" placeholder="or paste cookie jar string" />
+            </div>
+          </div>
         </div>
-        <button id="save-settings-btn" class="primary">Save</button>
+        <button id="save-settings-btn" class="primary">Save pasted values</button>
         <p id="settings-status" class="hint"></p>
         <p class="hint db-path">Database: <code id="db-path"></code></p>
       </section>

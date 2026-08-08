@@ -38,8 +38,21 @@ Both live outside this repository, so there's nothing sensitive to
 ## Getting credentials
 
 None of these sites' credentials are things this tool can obtain for you via
-username/password login (this is intentionally out of scope). Instead you
-copy a cookie or token out of your own already-logged-in browser session.
+username/password login (this is intentionally out of scope) — but you don't
+need devtools either. The easiest path is the desktop app
+(`cargo run -p library-desktop`, see [`desktop/README.md`](desktop/README.md)):
+open Settings and click "Sign in automatically" next to each source. It opens
+a real embedded browser window on that site's own login page; once you're
+logged in the session is read straight out of the window and saved to config
+for you (Humble Bundle and Manning additionally show a small "I'm logged in"
+button in the window itself, since neither reliably signals a completed
+login through cookies alone). The CLI and desktop app share the same
+`config.toml`, so signing in once in the desktop app is enough even if you
+only ever use the CLI afterwards.
+
+If you'd rather not run the desktop app, or the automatic flow ever breaks
+against a site change, each source can still be set manually by pulling the
+value out of your own browser's devtools:
 
 ### Humble Bundle
 

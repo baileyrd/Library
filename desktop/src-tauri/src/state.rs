@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use anyhow::Result;
 use library_core::config::Config;
@@ -8,6 +8,10 @@ use library_core::db::Db;
 /// connection is shared across Tauri's command threadpool behind a mutex
 /// rather than opened per-call. `Config` is cheap to clone/reload but kept
 /// alongside it so credential updates persist through the same lock.
+///
+/// `parking_lot::Mutex` rather than `std::sync::Mutex`: no poisoning to
+/// unwrap at every call site, and every lock here is held only for a quick
+/// synchronous read/write, never across an `.await`.
 pub struct AppState {
     pub db: Mutex<Db>,
     pub config: Mutex<Config>,

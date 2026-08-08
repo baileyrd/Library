@@ -258,6 +258,30 @@ document.getElementById("save-settings-btn").addEventListener("click", async () 
   await loadSettings();
 });
 
+document.querySelectorAll(".capture-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const source = btn.dataset.capture;
+    const label = sourceLabels[source] || source;
+    const original = btn.textContent;
+    const status = document.getElementById("settings-status");
+    btn.disabled = true;
+    btn.textContent = "Waiting for login\u2026";
+    status.textContent = `A login window opened for ${label} \u2014 log in there and it finishes automatically.`;
+    try {
+      const result = await invoke("capture_credential", { source });
+      status.textContent = result.cancelled
+        ? `Cancelled \u2014 the ${label} login window was closed before capture finished.`
+        : `${label} credential captured and saved.`;
+      await loadSettings();
+    } catch (e) {
+      status.textContent = `Error capturing ${label}: ${e}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+});
+
 // --- Init ---
 
 loadBooks();

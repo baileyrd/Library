@@ -128,9 +128,17 @@ button.primary:hover { background: var(--accent-hover); }
 
 .match-card.weak { opacity: 0.75; }
 
-.settings-grid { display: flex; flex-direction: column; gap: 1rem; max-width: 480px; }
+.settings-grid { display: flex; flex-direction: column; gap: 1.1rem; max-width: 560px; }
 
-.settings-grid label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--text-muted); }
+.cred-row { display: flex; flex-direction: column; gap: 0.35rem; }
+
+.cred-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-muted); }
+
+.cred-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+.cred-actions input { flex: 1; }
+
+.capture-btn { white-space: nowrap; }
 
 .status-pill {
   display: inline-block;

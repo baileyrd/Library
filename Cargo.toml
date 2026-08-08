@@ -11,6 +11,7 @@ anyhow = "1.0.104"
 chrono = { version = "0.4.45", features = ["serde"] }
 csv = "1.4.0"
 dirs = "6.0.0"
+parking_lot = "0.12.5"
 regex = "1.13.1"
 reqwest = { version = "0.13.4", features = ["json", "cookies", "blocking"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
