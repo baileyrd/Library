@@ -87,9 +87,8 @@ pub fn fetch_orders(cookie: &str) -> Result<Vec<Book>> {
 
     let mut books = Vec::new();
     for gamekey in gamekeys {
-        let url = format!(
-            "https://www.humblebundle.com/api/v1/order/{gamekey}?ajax=true&all_tpkds=true"
-        );
+        let url =
+            format!("https://www.humblebundle.com/api/v1/order/{gamekey}?ajax=true&all_tpkds=true");
         let detail_response = client
             .get(&url)
             .header("Cookie", &cookie_header)
@@ -98,7 +97,9 @@ pub fn fetch_orders(cookie: &str) -> Result<Vec<Book>> {
             .send()
             .with_context(|| format!("failed to fetch Humble Bundle order {gamekey}"))?
             .text()
-            .with_context(|| format!("failed to read Humble Bundle order {gamekey} response body"))?;
+            .with_context(|| {
+                format!("failed to read Humble Bundle order {gamekey} response body")
+            })?;
 
         books.extend(parse_order_response(&detail_response)?);
     }
@@ -120,10 +121,7 @@ pub fn parse_order_response(json: &str) -> Result<Vec<Book>> {
 
     let mut books = Vec::new();
     for subproduct in detail.subproducts {
-        let is_ebook = subproduct
-            .downloads
-            .iter()
-            .any(|d| d.platform == "ebook");
+        let is_ebook = subproduct.downloads.iter().any(|d| d.platform == "ebook");
         if !is_ebook {
             continue;
         }
@@ -235,8 +233,14 @@ mod tests {
     #[test]
     fn normalizes_format_variants() {
         let books = parse_order_response(ORDER_FIXTURE).unwrap();
-        let programming_rust = books.iter().find(|b| b.title == "Programming Rust").unwrap();
-        assert_eq!(programming_rust.formats, vec!["epub".to_string(), "pdf".to_string()]);
+        let programming_rust = books
+            .iter()
+            .find(|b| b.title == "Programming Rust")
+            .unwrap();
+        assert_eq!(
+            programming_rust.formats,
+            vec!["epub".to_string(), "pdf".to_string()]
+        );
     }
 
     #[test]
@@ -244,7 +248,10 @@ mod tests {
         let books = parse_order_response(ORDER_FIXTURE).unwrap();
         let ria = books.iter().find(|b| b.title == "Rust in Action").unwrap();
         assert_eq!(ria.source_id, Some("rust_in_action".to_string()));
-        assert_eq!(ria.formats, vec!["epub".to_string(), "mobi".to_string(), "pdf".to_string()]);
+        assert_eq!(
+            ria.formats,
+            vec!["epub".to_string(), "mobi".to_string(), "pdf".to_string()]
+        );
         assert!(ria.isbn.is_none());
         assert!(ria.authors.is_empty());
     }
@@ -252,7 +259,10 @@ mod tests {
     #[test]
     fn order_list_parses_gamekeys() {
         let json = r#"[{"gamekey": "abc"}, {"gamekey": "def"}]"#;
-        assert_eq!(parse_order_list_response(json), vec!["abc".to_string(), "def".to_string()]);
+        assert_eq!(
+            parse_order_list_response(json),
+            vec!["abc".to_string(), "def".to_string()]
+        );
     }
 
     #[test]

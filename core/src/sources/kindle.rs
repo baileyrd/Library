@@ -78,7 +78,9 @@ pub fn parse_csv(csv_contents: &str) -> Result<Vec<Book>> {
         // re-importing the same CSV updates existing rows instead of
         // duplicating them (unlike the live sources, there's no stable
         // per-item id to key on here).
-        let source_id = isbn.clone().unwrap_or_else(|| normalize_title(&record.title));
+        let source_id = isbn
+            .clone()
+            .unwrap_or_else(|| normalize_title(&record.title));
 
         books.push(Book {
             id: None,
@@ -106,8 +108,14 @@ mod tests {
         let books = parse_csv(csv).unwrap();
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].title, "Programming Rust");
-        assert_eq!(books[0].authors, vec!["Jim Blandy".to_string(), "Jason Orendorff".to_string()]);
-        assert_eq!(books[0].formats, vec!["epub".to_string(), "mobi".to_string()]);
+        assert_eq!(
+            books[0].authors,
+            vec!["Jim Blandy".to_string(), "Jason Orendorff".to_string()]
+        );
+        assert_eq!(
+            books[0].formats,
+            vec!["epub".to_string(), "mobi".to_string()]
+        );
         assert_eq!(books[0].isbn, Some("9781492052548".to_string()));
         assert_eq!(books[0].source_id, Some("9781492052548".to_string()));
     }

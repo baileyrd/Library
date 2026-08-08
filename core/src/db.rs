@@ -142,7 +142,8 @@ impl Db {
                      FROM books WHERE source = ?1 ORDER BY title",
                 )?;
                 let rows = stmt.query_map(params![source.as_str()], row_to_book)?;
-                rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+                    .map_err(Into::into)
             }
             None => self.all_books(),
         }
@@ -154,7 +155,8 @@ impl Db {
              FROM books ORDER BY title",
         )?;
         let rows = stmt.query_map([], row_to_book)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     pub fn get_book(&self, id: i64) -> Result<Option<Book>> {
@@ -193,7 +195,9 @@ impl Db {
     }
 
     pub fn delete_book(&self, id: i64) -> Result<bool> {
-        let affected = self.conn.execute("DELETE FROM books WHERE id = ?1", params![id])?;
+        let affected = self
+            .conn
+            .execute("DELETE FROM books WHERE id = ?1", params![id])?;
         Ok(affected > 0)
     }
 
@@ -211,11 +215,7 @@ impl Db {
         for row in rows {
             let (source_str, count) = row?;
             let source: Source = source_str.parse().map_err(|e: anyhow::Error| {
-                rusqlite::Error::InvalidColumnType(
-                    0,
-                    e.to_string(),
-                    rusqlite::types::Type::Text,
-                )
+                rusqlite::Error::InvalidColumnType(0, e.to_string(), rusqlite::types::Type::Text)
             })?;
             result.push((source, count));
         }
@@ -245,7 +245,8 @@ fn row_to_book(row: &rusqlite::Row) -> rusqlite::Result<Book> {
     let source: Source = source_raw.parse().map_err(|e: anyhow::Error| {
         rusqlite::Error::InvalidColumnType(4, e.to_string(), rusqlite::types::Type::Text)
     })?;
-    let acquired_at = acquired_at_raw.and_then(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
+    let acquired_at =
+        acquired_at_raw.and_then(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
 
     Ok(Book {
         id: Some(id),
@@ -291,7 +292,11 @@ mod tests {
     #[test]
     fn upsert_inserts_then_updates_on_same_source_id() {
         let db = Db::open_in_memory().unwrap();
-        let book = sample_book("Rust in Action", Source::HumbleBundle, Some("rust-in-action"));
+        let book = sample_book(
+            "Rust in Action",
+            Source::HumbleBundle,
+            Some("rust-in-action"),
+        );
 
         let outcome = db.upsert_book(&book).unwrap();
         assert!(matches!(outcome, UpsertOutcome::Inserted(_)));
@@ -355,7 +360,11 @@ mod tests {
 
         let stats = db.stats().unwrap();
         assert_eq!(stats.len(), 2);
-        let humble_count = stats.iter().find(|(s, _)| *s == Source::HumbleBundle).unwrap().1;
+        let humble_count = stats
+            .iter()
+            .find(|(s, _)| *s == Source::HumbleBundle)
+            .unwrap()
+            .1;
         assert_eq!(humble_count, 2);
     }
 

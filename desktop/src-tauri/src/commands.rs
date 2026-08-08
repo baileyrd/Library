@@ -18,7 +18,10 @@ fn err(e: anyhow::Error) -> String {
 
 #[tauri::command]
 pub fn list_books(state: State<AppState>, source: Option<String>) -> Result<Vec<Book>, String> {
-    let source_filter = source.map(|s| s.parse::<Source>()).transpose().map_err(err)?;
+    let source_filter = source
+        .map(|s| s.parse::<Source>())
+        .transpose()
+        .map_err(err)?;
     let db = state.db.lock().unwrap();
     db.list_books(source_filter).map_err(err)
 }
@@ -47,7 +50,10 @@ pub fn add_book(
         library_core::db::UpsertOutcome::Inserted(id) => id,
         library_core::db::UpsertOutcome::Updated(id) => id,
     };
-    let book = db.get_book(id).map_err(err)?.ok_or_else(|| "book vanished after insert".to_string())?;
+    let book = db
+        .get_book(id)
+        .map_err(err)?
+        .ok_or_else(|| "book vanished after insert".to_string())?;
 
     Ok(AddBookResult { book, warnings })
 }
@@ -74,7 +80,9 @@ pub fn update_book(
     if !changed {
         return Err(format!("no book with id {id}"));
     }
-    db.get_book(id).map_err(err)?.ok_or_else(|| format!("no book with id {id}"))
+    db.get_book(id)
+        .map_err(err)?
+        .ok_or_else(|| format!("no book with id {id}"))
 }
 
 #[tauri::command]
@@ -92,7 +100,11 @@ pub struct CheckResult {
 #[tauri::command]
 pub fn check_duplicates(state: State<AppState>, query: String) -> Result<CheckResult, String> {
     let digits: String = query.chars().filter(|c| c.is_ascii_digit()).collect();
-    let isbn = if digits.len() == 10 || digits.len() == 13 { Some(digits) } else { None };
+    let isbn = if digits.len() == 10 || digits.len() == 13 {
+        Some(digits)
+    } else {
+        None
+    };
 
     let candidate = Book {
         id: None,
@@ -108,7 +120,8 @@ pub fn check_duplicates(state: State<AppState>, query: String) -> Result<CheckRe
 
     let db = state.db.lock().unwrap();
     let existing = db.all_books().map_err(err)?;
-    let matches = dedup::find_duplicates_with_threshold(&existing, &candidate, CHECK_WEAK_THRESHOLD);
+    let matches =
+        dedup::find_duplicates_with_threshold(&existing, &candidate, CHECK_WEAK_THRESHOLD);
     let (strong, weak): (Vec<_>, Vec<_>) = matches.into_iter().partition(|m| m.confidence >= 0.90);
 
     Ok(CheckResult { strong, weak })
@@ -160,7 +173,11 @@ pub struct ImportSummary {
 }
 
 #[tauri::command]
-pub fn import_source(state: State<AppState>, source: String, file: Option<String>) -> Result<ImportSummary, String> {
+pub fn import_source(
+    state: State<AppState>,
+    source: String,
+    file: Option<String>,
+) -> Result<ImportSummary, String> {
     let fetcher: Box<dyn SourceFetcher> = match source.as_str() {
         "humble" => {
             let cookie = {
@@ -220,5 +237,10 @@ pub fn import_source(state: State<AppState>, source: String, file: Option<String
         }
     }
 
-    Ok(ImportSummary { source, new_count, updated_count, warnings })
+    Ok(ImportSummary {
+        source,
+        new_count,
+        updated_count,
+        warnings,
+    })
 }

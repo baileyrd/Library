@@ -115,7 +115,10 @@ mod tests {
         let config = Config::default();
         config.save_to(&config_path).unwrap();
 
-        let mode = std::fs::metadata(&config_path).unwrap().permissions().mode();
+        let mode = std::fs::metadata(&config_path)
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o777, 0o600);
     }
 
@@ -125,7 +128,10 @@ mod tests {
             db_path: Some(PathBuf::from("/custom/path/library.db")),
             ..Default::default()
         };
-        assert_eq!(config.resolve_db_path(), PathBuf::from("/custom/path/library.db"));
+        assert_eq!(
+            config.resolve_db_path(),
+            PathBuf::from("/custom/path/library.db")
+        );
     }
 
     #[test]

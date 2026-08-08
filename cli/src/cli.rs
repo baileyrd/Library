@@ -71,9 +71,7 @@ pub enum Command {
     },
 
     /// Delete a book by id.
-    Remove {
-        id: i64,
-    },
+    Remove { id: i64 },
 }
 
 #[derive(Subcommand)]
