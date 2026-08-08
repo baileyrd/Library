@@ -153,7 +153,7 @@ invocation; `-v` / `--verbose` prints extra diagnostics to stderr.
   per book) — left empty for now.
 - **Manning**: no public API exists, so this scrapes dashboard HTML with
   selectors reverse-engineered from a third-party tool. Adjust the
-  selectors/attributes in `src/sources/manning.rs` if Manning's markup
+  selectors/attributes in `core/src/sources/manning.rs` if Manning's markup
   changes.
 - **Kindle**: no live fetch (see above) — CSV import only, with data quality
   depending entirely on what you put in the file.

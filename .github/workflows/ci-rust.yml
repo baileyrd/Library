@@ -1,8 +1,8 @@
 name: CI
 
 # Runs on every PR and on pushes to the default branch. The "on green CI, merge"
-# rule depends on this workflow being the required status check — set it as required
-# under branch protection (see references/ci-and-branch-protection.md).
+# rule depends on this workflow being the required status check — set it as
+# required under Settings -> Branches -> branch protection rule for `main`.
 on:
   pull_request:
   push:
@@ -43,8 +43,11 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        # Warnings fail the build, matching the "no unwrap/expect outside tests,
-        # clippy clean" standard.
+        # Warnings fail the build. Note: this repo does not currently forbid
+        # unwrap()/expect() in production code (see e.g. core/src/dedup.rs's
+        # Regex::new(...).unwrap() calls and desktop/src-tauri's mutex-lock
+        # unwraps) — "clean" here means no clippy lint warnings, not adherence
+        # to a stricter unwrap-free standard.
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Test

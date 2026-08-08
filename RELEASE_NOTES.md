@@ -38,6 +38,23 @@ reverse chronological (no version tags yet — this is pre-1.0 and unpublished).
   even compile `desktop/` without an explicit apt-get install step. Added one,
   and switched `clippy`/`test` to `--workspace` so all three crates are
   actually covered, not just whichever one Cargo defaults to.
-- **Known limitation:** the CI required-status-check step (branch protection)
-  is a manual follow-up in the GitHub UI, not something this PR sets — see the
-  repo-config skill's `ci-and-branch-protection.md` for the exact steps.
+- **Known limitation:** the CI required-status-check step is a manual
+  follow-up — under this repo's Settings -> Branches, add a branch protection
+  rule for `main` requiring the `check` job to pass before merging. Nothing
+  in this PR sets that automatically.
+- **Fixed:** a documentation accuracy pass over every doc in the repo caught
+  and fixed several drift issues: two stale `src/...` paths left over from
+  the pre-workspace layout (README's Manning troubleshooting note,
+  desktop/README's `core/` crate reference), an incorrect claim in
+  desktop/README that `cargo tauri build` outputs to
+  `desktop/src-tauri/target/` (this is a Cargo workspace — `target/` is
+  shared at the repo root), an inaccurate "no unwrap/expect outside tests"
+  claim in the CI workflow's own comment (untrue — see e.g.
+  `core/src/dedup.rs`'s `Regex::new(...).unwrap()` calls and
+  `desktop/src-tauri`'s mutex-lock unwraps; the comment now says so plainly
+  instead of asserting a standard the code doesn't meet), two comments
+  pointing readers at a `references/ci-and-branch-protection.md` path that
+  only exists inside the repo-config skill's own directory, not this repo
+  (replaced with the actual steps inline), and an empty CHANGELOG.md
+  `[Unreleased]` section despite the CLI and desktop app already existing on
+  `main` (backfilled with what's actually shipped).
