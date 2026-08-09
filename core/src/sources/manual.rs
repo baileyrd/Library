@@ -5,6 +5,7 @@ pub fn build_manual_book(
     authors: Vec<String>,
     isbn: Option<String>,
     formats: Vec<String>,
+    cover_url: Option<String>,
 ) -> Book {
     Book {
         id: None,
@@ -16,6 +17,7 @@ pub fn build_manual_book(
         formats,
         acquired_at: None,
         raw_json: None,
+        cover_url,
     }
 }
 
@@ -30,9 +32,14 @@ mod tests {
             vec!["Author One".to_string()],
             Some("1234567890".to_string()),
             vec!["pdf".to_string()],
+            Some("https://example.com/cover.jpg".to_string()),
         );
         assert_eq!(book.title, "My Book");
         assert!(matches!(book.source, Source::Manual));
         assert!(book.source_id.is_none());
+        assert_eq!(
+            book.cover_url,
+            Some("https://example.com/cover.jpg".to_string())
+        );
     }
 }

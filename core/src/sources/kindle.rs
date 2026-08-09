@@ -92,6 +92,8 @@ pub fn parse_csv(csv_contents: &str) -> Result<Vec<Book>> {
             formats,
             acquired_at: None,
             raw_json: None,
+            // No cover art in a Kindle CSV export.
+            cover_url: None,
         });
     }
 

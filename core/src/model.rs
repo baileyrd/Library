@@ -70,4 +70,5 @@ pub struct Book {
     pub formats: Vec<String>,
     pub acquired_at: Option<chrono::NaiveDate>,
     pub raw_json: Option<String>,
+    pub cover_url: Option<String>,
 }

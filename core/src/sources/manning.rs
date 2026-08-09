@@ -93,6 +93,11 @@ pub fn parse_dashboard_html(html: &str) -> Result<Vec<Book>> {
             formats: Vec::new(),
             acquired_at: None,
             raw_json: Some(format!("is_meap={is_meap}")),
+            // Not scraped from this page -- no live sample of the
+            // dashboard's markup was available to confirm a cover-image
+            // selector, unlike Packt/Humble Bundle where the API response
+            // shape was confirmed directly.
+            cover_url: None,
         });
     }
 

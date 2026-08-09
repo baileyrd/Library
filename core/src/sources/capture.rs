@@ -18,17 +18,12 @@
 /// into this before calling into this module.
 pub type CookiePair = (String, String);
 
-/// Synthetic cookie name the injected page script writes once it observes
-/// an `Authorization: Bearer <token>` header going out to Packt's API.
-/// Never sent to any real server -- just a channel for the page script to
-/// hand the token back to the Rust side, which reads it the same way it
-/// reads any other cookie.
-pub const PACKT_TOKEN_SIGNAL_COOKIE: &str = "__library_captured_token";
-
 /// Synthetic cookie name the injected "I'm logged in" banner button sets.
 /// Used as the completion signal for sources where no single well-known
 /// cookie reliably indicates a finished login (Manning spreads its session
-/// across several cookies with no documented, stable name to key off of).
+/// across several cookies with no documented, stable name to key off of;
+/// Packt requires two cookies together -- `packt_session` and
+/// `XSRF-TOKEN` -- so the same reasoning applies).
 pub const MANUAL_READY_SIGNAL_COOKIE: &str = "__library_capture_ready";
 
 /// How a source's capture completes.
@@ -48,10 +43,6 @@ pub enum Completion {
     /// `name=value; name=value` jar string. For sources with no single
     /// well-known session cookie to key off of.
     ManualCookieJar,
-    /// Capture completes as soon as the page-injected script sniffs an
-    /// `Authorization: Bearer` header and reports it via
-    /// [`PACKT_TOKEN_SIGNAL_COOKIE`] -- no button click needed.
-    SniffedBearerToken,
 }
 
 /// Describes how to capture one source's credential via an embedded login
@@ -89,7 +80,7 @@ pub const PACKT_CAPTURE: CaptureSpec = CaptureSpec {
         "https://subscription.packtpub.com",
         "https://www.packtpub.com",
     ],
-    completion: Completion::SniffedBearerToken,
+    completion: Completion::ManualCookieJar,
 };
 
 pub const MANNING_CAPTURE: CaptureSpec = CaptureSpec {
@@ -120,15 +111,14 @@ fn manual_ready(cookies: &[CookiePair]) -> bool {
 }
 
 /// Joins every real cookie (excluding this module's internal signal
-/// cookies) into the `name=value; name=value` jar string a raw `Cookie`
+/// cookie) into the `name=value; name=value` jar string a raw `Cookie`
 /// header expects -- exactly what a browser would send, and exactly what
-/// `Manning::fetch_dashboard` and the README's manual instructions expect.
+/// `Manning::fetch_dashboard`, `Packt::fetch`, and the README's manual
+/// instructions expect.
 fn build_cookie_jar(cookies: &[CookiePair]) -> String {
     cookies
         .iter()
-        .filter(|(name, _)| {
-            name != MANUAL_READY_SIGNAL_COOKIE && name != PACKT_TOKEN_SIGNAL_COOKIE
-        })
+        .filter(|(name, _)| name != MANUAL_READY_SIGNAL_COOKIE)
         .map(|(name, value)| format!("{name}={value}"))
         .collect::<Vec<_>>()
         .join("; ")
@@ -140,13 +130,11 @@ fn build_cookie_jar(cookies: &[CookiePair]) -> String {
 pub fn evaluate_capture(spec: &CaptureSpec, cookies: &[CookiePair]) -> Option<String> {
     match spec.completion {
         Completion::AutoCookie(name) => find_cookie(cookies, name).map(str::to_string),
-        Completion::ManualCookie(name) => {
-            manual_ready(cookies).then(|| find_cookie(cookies, name)).flatten().map(str::to_string)
-        }
+        Completion::ManualCookie(name) => manual_ready(cookies)
+            .then(|| find_cookie(cookies, name))
+            .flatten()
+            .map(str::to_string),
         Completion::ManualCookieJar => manual_ready(cookies).then(|| build_cookie_jar(cookies)),
-        Completion::SniffedBearerToken => {
-            find_cookie(cookies, PACKT_TOKEN_SIGNAL_COOKIE).map(str::to_string)
-        }
     }
 }
 
@@ -177,70 +165,13 @@ const BANNER_JS: &str = r#"(function () {
   new MutationObserver(addBanner).observe(document.documentElement, { childList: true, subtree: true });
 })();"#;
 
-// Patches `fetch`/`XMLHttpRequest` to notice any outgoing
-// `Authorization: Bearer <token>` header bound for packtpub.com and hand it
-// back via `PACKT_TOKEN_SIGNAL_COOKIE`. Packt's API shape here is
-// reverse-engineered (see `sources::packt`), so this sniffs the header
-// generically rather than assuming one specific request URL -- but it does
-// filter by host: login/dashboard pages load plenty of third-party
-// scripts (analytics, A/B testing, etc.) that also send their own Bearer
-// tokens, and an unscoped sniff would happily capture and report one of
-// those instead, overwriting whatever the real Packt token was. Self-
-// contained (own IIFE) since, unlike the banner, nothing else needs to
-// share its scope.
-const TOKEN_SNIFF_JS: &str = r#"(function () {
-  var TOKEN_COOKIE = "__library_captured_token";
-  var HOST_FILTER = "packtpub.com";
-  function reportAuthHeader(url, value) {
-    if (!value || !url || String(url).indexOf(HOST_FILTER) === -1) return;
-    var m = /^Bearer\s+(.+)$/i.exec(String(value).trim());
-    if (!m) return;
-    document.cookie = TOKEN_COOKIE + "=" + m[1] + "; path=/; max-age=3600";
-  }
-  var origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    this.__library_url = url;
-    return origOpen.apply(this, arguments);
-  };
-  var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-    if (/^authorization$/i.test(name)) reportAuthHeader(this.__library_url, value);
-    return origSetHeader.apply(this, arguments);
-  };
-  var origFetch = window.fetch;
-  if (origFetch) {
-    window.fetch = function (input, init) {
-      try {
-        var url = typeof input === "string" ? input : (input && input.url);
-        var headers = init && init.headers;
-        if (headers) {
-          if (typeof Headers !== "undefined" && headers instanceof Headers) {
-            reportAuthHeader(url, headers.get("authorization"));
-          } else {
-            var key = Object.keys(headers).find(function (k) {
-              return /^authorization$/i.test(k);
-            });
-            if (key) reportAuthHeader(url, headers[key]);
-          }
-        } else if (input && typeof input !== "string" && input.headers && input.headers.get) {
-          reportAuthHeader(url, input.headers.get("authorization"));
-        }
-      } catch (e) {}
-      return origFetch.apply(this, arguments);
-    };
-  }
-})();"#;
-
 /// Builds the script to inject into the login window on every
-/// navigation/frame. Only sources that actually complete via the manual
-/// "I'm logged in" banner get it -- showing it for `SniffedBearerToken`
-/// (Packt) would be actively misleading, since clicking it does nothing
-/// there and the button would falsely claim success. `AutoCookie` needs
-/// neither: it completes on its own with no user action or page script.
+/// navigation/frame. Only sources that complete via the manual "I'm logged
+/// in" banner get it. `AutoCookie` needs no page script at all -- it
+/// completes on its own with no user action.
 pub fn injected_script(spec: &CaptureSpec) -> String {
     match spec.completion {
         Completion::ManualCookie(_) | Completion::ManualCookieJar => BANNER_JS.to_string(),
-        Completion::SniffedBearerToken => TOKEN_SNIFF_JS.to_string(),
         Completion::AutoCookie(_) => String::new(),
     }
 }
@@ -294,22 +225,26 @@ mod tests {
         };
         assert_eq!(evaluate_capture(&spec, &[]), None);
         let cookies = [pair("session", "value")];
-        assert_eq!(
-            evaluate_capture(&spec, &cookies),
-            Some("value".to_string())
-        );
+        assert_eq!(evaluate_capture(&spec, &cookies), Some("value".to_string()));
     }
 
     #[test]
-    fn packt_captures_from_signal_cookie_only() {
+    fn packt_requires_manual_ready_signal_then_joins_jar() {
         let spec = &PACKT_CAPTURE;
-        assert_eq!(evaluate_capture(spec, &[]), None);
-        // A real cookie jar with no signal cookie yet: still pending.
-        assert_eq!(evaluate_capture(spec, &[pair("session", "abc")]), None);
-        let cookies = [pair(PACKT_TOKEN_SIGNAL_COOKIE, "eyJhbGciOi...")];
+        let cookies_not_ready = [
+            pair("packt_session", "sess123"),
+            pair("XSRF-TOKEN", "tok456"),
+        ];
+        assert_eq!(evaluate_capture(spec, &cookies_not_ready), None);
+
+        let cookies_ready = [
+            pair("packt_session", "sess123"),
+            pair("XSRF-TOKEN", "tok456"),
+            pair(MANUAL_READY_SIGNAL_COOKIE, "1"),
+        ];
         assert_eq!(
-            evaluate_capture(spec, &cookies),
-            Some("eyJhbGciOi...".to_string())
+            evaluate_capture(spec, &cookies_ready),
+            Some("packt_session=sess123; XSRF-TOKEN=tok456".to_string())
         );
     }
 
@@ -336,32 +271,30 @@ mod tests {
             pair("a", "1"),
             pair(MANUAL_READY_SIGNAL_COOKIE, "1"),
             pair("b", "2"),
-            pair(PACKT_TOKEN_SIGNAL_COOKIE, "tok"),
         ];
         assert_eq!(build_cookie_jar(&cookies), "a=1; b=2");
     }
 
     #[test]
     fn injected_script_is_specific_to_each_source_completion_mode() {
-        // Humble and Manning complete via the manual banner -- they get it,
-        // and never the bearer-token sniffer (irrelevant to them).
+        // Humble, Packt and Manning all complete via the manual banner.
         let humble_script = injected_script(&HUMBLE_CAPTURE);
         assert!(humble_script.contains("library-capture-banner"));
-        assert!(!humble_script.contains("setRequestHeader"));
+
+        let packt_script = injected_script(&PACKT_CAPTURE);
+        assert!(packt_script.contains("library-capture-banner"));
 
         let manning_script = injected_script(&MANNING_CAPTURE);
         assert!(manning_script.contains("library-capture-banner"));
-        assert!(!manning_script.contains("setRequestHeader"));
 
-        // Packt completes only via the sniffed bearer token -- it must NOT
-        // get the banner, since clicking it would do nothing on the Rust
-        // side while falsely claiming "Captured" (the bug this guards).
-        let packt_script = injected_script(&PACKT_CAPTURE);
-        assert!(!packt_script.contains("library-capture-banner"));
-        assert!(packt_script.contains("setRequestHeader"));
-        // Regression: must filter by host, or an unrelated third-party
-        // script's Bearer token (analytics, A/B testing, etc.) can clobber
-        // the real Packt token in the signal cookie.
-        assert!(packt_script.contains("packtpub.com"));
+        // AutoCookie sources get no injected script at all.
+        let auto_spec = CaptureSpec {
+            source: "test",
+            label: "Test",
+            login_url: "https://example.com",
+            cookie_domains: &["https://example.com"],
+            completion: Completion::AutoCookie("session"),
+        };
+        assert_eq!(injected_script(&auto_spec), "");
     }
 }

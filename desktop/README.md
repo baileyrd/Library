@@ -42,9 +42,20 @@ cargo tauri build     # produces an installer/bundle under target/release/bundle
 ## What it can do
 
 - **Books tab**: list/filter your library by source, add a book, edit or
-  remove an existing one.
+  remove an existing one. Click a title (list view) or a cover (grid view)
+  to open its detail page: large cover, source/ISBN/formats/acquired date,
+  any copy of the same title owned via another source, and (collapsed by
+  default) the raw per-book data captured at import time.
 - **Check before buying**: search by title or ISBN before you buy — same
-  duplicate-detection logic as `library check` on the CLI.
+  duplicate-detection logic as `library check` on the CLI. A second "Check a
+  Humble Bundle" box takes a bundle page URL (e.g.
+  `humblebundle.com/books/<slug>`) and checks every book in it at once, or
+  click "Check against current bundles" to discover and check every bundle
+  currently listed on humblebundle.com/books in one go — no login needed,
+  bundle contents (and the storefront listing) are public pages. Each
+  bundle's own title links straight to its humblebundle.com page (opens in
+  your default browser), and every matched candidate links to that book's
+  own detail page.
 - **Import tab**: trigger `import humble` / `import packt` / `import manning`
   (using credentials from Settings) or `import kindle` (type/paste the path to
   a CSV file — there's no native file-picker dialog yet, just a text field).

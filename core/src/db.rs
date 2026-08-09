@@ -28,12 +28,29 @@ CREATE TABLE IF NOT EXISTS books (
     formats TEXT,
     acquired_at TEXT,
     raw_json TEXT,
+    cover_url TEXT,
     created_at TEXT NOT NULL,
     UNIQUE(source, source_id)
 );
 CREATE INDEX IF NOT EXISTS idx_books_normalized_title ON books(normalized_title);
 CREATE INDEX IF NOT EXISTS idx_books_isbn ON books(isbn);
 ";
+
+/// Migrations beyond what `CREATE TABLE IF NOT EXISTS` can express --
+/// that guards table/index *creation* only, not adding a column to a
+/// `books` table that already existed before `cover_url` was introduced.
+/// SQLite's `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS` form, so
+/// this just attempts it and swallows the "duplicate column" error it
+/// raises when the column is already there (a DB created fresh already
+/// has it via `SCHEMA` above, so this is a guaranteed no-op after the
+/// first successful run on any given database file).
+fn migrate(conn: &Connection) -> Result<()> {
+    match conn.execute("ALTER TABLE books ADD COLUMN cover_url TEXT", []) {
+        Ok(_) => Ok(()),
+        Err(e) if e.to_string().contains("duplicate column name") => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
 
 impl Db {
     pub fn open(path: &Path) -> Result<Db> {
@@ -44,6 +61,7 @@ impl Db {
         }
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Db { conn })
     }
 
@@ -51,6 +69,7 @@ impl Db {
     pub fn open_in_memory() -> Result<Db> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(SCHEMA)?;
+        migrate(&conn)?;
         Ok(Db { conn })
     }
 
@@ -75,8 +94,8 @@ impl Db {
 
                 self.conn.execute(
                     "INSERT INTO books
-                        (title, normalized_title, authors, isbn, source, source_id, formats, acquired_at, raw_json, created_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                        (title, normalized_title, authors, isbn, source, source_id, formats, acquired_at, raw_json, cover_url, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                      ON CONFLICT(source, source_id) DO UPDATE SET
                         title = excluded.title,
                         normalized_title = excluded.normalized_title,
@@ -84,7 +103,8 @@ impl Db {
                         isbn = excluded.isbn,
                         formats = excluded.formats,
                         acquired_at = excluded.acquired_at,
-                        raw_json = excluded.raw_json",
+                        raw_json = excluded.raw_json,
+                        cover_url = excluded.cover_url",
                     params![
                         book.title,
                         normalized,
@@ -95,6 +115,7 @@ impl Db {
                         formats,
                         acquired_at,
                         book.raw_json,
+                        book.cover_url,
                         now,
                     ],
                 )?;
@@ -115,8 +136,8 @@ impl Db {
             None => {
                 self.conn.execute(
                     "INSERT INTO books
-                        (title, normalized_title, authors, isbn, source, source_id, formats, acquired_at, raw_json, created_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8, ?9)",
+                        (title, normalized_title, authors, isbn, source, source_id, formats, acquired_at, raw_json, cover_url, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8, ?9, ?10)",
                     params![
                         book.title,
                         normalized,
@@ -126,6 +147,7 @@ impl Db {
                         formats,
                         acquired_at,
                         book.raw_json,
+                        book.cover_url,
                         now,
                     ],
                 )?;
@@ -138,7 +160,7 @@ impl Db {
         match source_filter {
             Some(source) => {
                 let mut stmt = self.conn.prepare(
-                    "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json
+                    "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json, cover_url
                      FROM books WHERE source = ?1 ORDER BY title",
                 )?;
                 let rows = stmt.query_map(params![source.as_str()], row_to_book)?;
@@ -151,7 +173,7 @@ impl Db {
 
     pub fn all_books(&self) -> Result<Vec<Book>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json
+            "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json, cover_url
              FROM books ORDER BY title",
         )?;
         let rows = stmt.query_map([], row_to_book)?;
@@ -162,7 +184,7 @@ impl Db {
     pub fn get_book(&self, id: i64) -> Result<Option<Book>> {
         self.conn
             .query_row(
-                "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json
+                "SELECT id, title, authors, isbn, source, source_id, formats, acquired_at, raw_json, cover_url
                  FROM books WHERE id = ?1",
                 params![id],
                 row_to_book,
@@ -171,10 +193,11 @@ impl Db {
             .map_err(Into::into)
     }
 
-    /// Updates title/authors/isbn/formats in place, keeping the row's id,
-    /// source, source_id, acquired_at and raw_json untouched -- used by the
-    /// desktop app's edit form, where re-running the source/source_id-keyed
-    /// `upsert_book` logic would be the wrong tool (edits aren't re-imports).
+    /// Updates title/authors/isbn/formats/cover_url in place, keeping the
+    /// row's id, source, source_id, acquired_at and raw_json untouched --
+    /// used by the desktop app's edit form, where re-running the
+    /// source/source_id-keyed `upsert_book` logic would be the wrong tool
+    /// (edits aren't re-imports).
     pub fn update_book(
         &self,
         id: i64,
@@ -182,15 +205,49 @@ impl Db {
         authors: &[String],
         isbn: Option<&str>,
         formats: &[String],
+        cover_url: Option<&str>,
     ) -> Result<bool> {
         let normalized = normalize_title(title);
         let authors_joined = authors.join(", ");
         let formats_joined = formats.join(",");
         let affected = self.conn.execute(
-            "UPDATE books SET title = ?1, normalized_title = ?2, authors = ?3, isbn = ?4, formats = ?5
-             WHERE id = ?6",
-            params![title, normalized, authors_joined, isbn, formats_joined, id],
+            "UPDATE books SET title = ?1, normalized_title = ?2, authors = ?3, isbn = ?4, formats = ?5, cover_url = ?6
+             WHERE id = ?7",
+            params![title, normalized, authors_joined, isbn, formats_joined, cover_url, id],
         )?;
+        Ok(affected > 0)
+    }
+
+    /// Fills in only the fields it's given -- used by metadata enrichment
+    /// (`enrich::enrich_missing`), which only ever supplies a field the row
+    /// was actually missing, so this never overwrites existing data.
+    /// `update_book` isn't reused here because that requires (and rewrites)
+    /// every field, including ones enrichment has no opinion on.
+    pub fn update_metadata(
+        &self,
+        id: i64,
+        authors: Option<&[String]>,
+        isbn: Option<&str>,
+        cover_url: Option<&str>,
+    ) -> Result<bool> {
+        let mut affected = 0;
+        if let Some(authors) = authors {
+            let joined = authors.join(", ");
+            affected += self
+                .conn
+                .execute("UPDATE books SET authors = ?1 WHERE id = ?2", params![joined, id])?;
+        }
+        if let Some(isbn) = isbn {
+            affected += self
+                .conn
+                .execute("UPDATE books SET isbn = ?1 WHERE id = ?2", params![isbn, id])?;
+        }
+        if let Some(cover_url) = cover_url {
+            affected += self.conn.execute(
+                "UPDATE books SET cover_url = ?1 WHERE id = ?2",
+                params![cover_url, id],
+            )?;
+        }
         Ok(affected > 0)
     }
 
@@ -233,6 +290,7 @@ fn row_to_book(row: &rusqlite::Row) -> rusqlite::Result<Book> {
     let formats_raw: Option<String> = row.get(6)?;
     let acquired_at_raw: Option<String> = row.get(7)?;
     let raw_json: Option<String> = row.get(8)?;
+    let cover_url: Option<String> = row.get(9)?;
 
     let authors = authors_raw
         .filter(|s| !s.is_empty())
@@ -258,6 +316,7 @@ fn row_to_book(row: &rusqlite::Row) -> rusqlite::Result<Book> {
         formats,
         acquired_at,
         raw_json,
+        cover_url,
     })
 }
 
@@ -277,6 +336,7 @@ mod tests {
             formats: vec!["epub".to_string(), "pdf".to_string()],
             acquired_at: None,
             raw_json: None,
+            cover_url: None,
         }
     }
 
@@ -388,6 +448,7 @@ mod tests {
                 &["New Author".to_string()],
                 Some("9780000000000"),
                 &["mobi".to_string()],
+                None,
             )
             .unwrap();
         assert!(changed);
@@ -404,7 +465,7 @@ mod tests {
     #[test]
     fn update_book_returns_false_for_missing_id() {
         let db = Db::open_in_memory().unwrap();
-        assert!(!db.update_book(999, "X", &[], None, &[]).unwrap());
+        assert!(!db.update_book(999, "X", &[], None, &[], None).unwrap());
     }
 
     #[test]
@@ -415,5 +476,47 @@ mod tests {
         let all = db.all_books().unwrap();
         assert_eq!(all[0].authors, vec!["Jane Doe".to_string()]);
         assert_eq!(all[0].formats, vec!["epub".to_string(), "pdf".to_string()]);
+    }
+
+    #[test]
+    fn update_metadata_fills_only_given_fields() {
+        let db = Db::open_in_memory().unwrap();
+        let mut book = sample_book("Book A", Source::HumbleBundle, Some("a"));
+        book.authors = Vec::new();
+        book.isbn = None;
+        book.cover_url = None;
+        db.upsert_book(&book).unwrap();
+        let id = db.all_books().unwrap()[0].id.unwrap();
+
+        let changed = db
+            .update_metadata(id, Some(&["New Author".to_string()]), None, None)
+            .unwrap();
+        assert!(changed);
+        let after_authors = db.get_book(id).unwrap().unwrap();
+        assert_eq!(after_authors.authors, vec!["New Author".to_string()]);
+        assert_eq!(after_authors.isbn, None);
+
+        db.update_metadata(id, None, Some("9780000000000"), None)
+            .unwrap();
+        let after_isbn = db.get_book(id).unwrap().unwrap();
+        assert_eq!(after_isbn.authors, vec!["New Author".to_string()]);
+        assert_eq!(after_isbn.isbn, Some("9780000000000".to_string()));
+        assert_eq!(after_isbn.cover_url, None);
+
+        db.update_metadata(id, None, None, Some("https://example.com/cover.jpg"))
+            .unwrap();
+        let after_cover = db.get_book(id).unwrap().unwrap();
+        assert_eq!(
+            after_cover.cover_url,
+            Some("https://example.com/cover.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn update_metadata_returns_false_for_missing_id() {
+        let db = Db::open_in_memory().unwrap();
+        assert!(!db
+            .update_metadata(999, Some(&["X".to_string()]), None, None)
+            .unwrap());
     }
 }

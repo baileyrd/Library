@@ -43,6 +43,10 @@ pub enum Command {
         /// Repeatable: --format epub --format pdf
         #[arg(long = "format")]
         format: Vec<String>,
+
+        /// URL of a cover thumbnail to associate with this book.
+        #[arg(long = "cover-url")]
+        cover_url: Option<String>,
     },
 
     /// List books, optionally filtered by source.
@@ -61,8 +65,20 @@ pub enum Command {
         query: String,
     },
 
+    /// Check every book in a public Humble Bundle bundle page against your library.
+    CheckBundle {
+        /// A humblebundle.com books bundle URL, e.g. https://www.humblebundle.com/books/<slug>.
+        url: String,
+    },
+
+    /// Discover every bundle currently on humblebundle.com/books and check all of them.
+    CheckBundles,
+
     /// Print per-source book counts and the total.
     Stats,
+
+    /// Look up authors/ISBN for every book missing either, via Open Library.
+    Enrich,
 
     /// View or update stored credentials/settings.
     Config {
@@ -78,7 +94,7 @@ pub enum Command {
 pub enum ImportSource {
     /// Import from Humble Bundle (requires `humble_cookie` in config).
     Humble,
-    /// Import from Packt (requires `packt_token` in config).
+    /// Import from Packt (requires `packt_cookies` in config).
     Packt,
     /// Import from Manning (requires `manning_cookies` in config).
     Manning,
@@ -100,12 +116,13 @@ pub enum ConfigAction {
         #[arg(long = "humble-cookie")]
         humble_cookie: Option<String>,
 
-        /// A Packt API bearer token (JWT), obtained via your browser's devtools
-        /// (Application/Storage -> Cookies/Local Storage, or the Network tab's
-        /// request headers on services.packtpub.com). Packt username/password
+        /// The full subscription.packtpub.com cookie jar string
+        /// (semicolon-separated name=value pairs, must include
+        /// `packt_session` and `XSRF-TOKEN`), obtained via your browser's
+        /// devtools (Application/Storage -> Cookies). Packt username/password
         /// login is not performed by this tool.
-        #[arg(long = "packt-token")]
-        packt_token: Option<String>,
+        #[arg(long = "packt-cookies")]
+        packt_cookies: Option<String>,
 
         /// The full manning.com + login.manning.com cookie jar string
         /// (semicolon-separated name=value pairs), obtained via your browser's

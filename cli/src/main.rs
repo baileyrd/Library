@@ -13,7 +13,9 @@ use library_core::sources::Source as SourceFetcher;
 
 /// Fuzzy matches below this confidence, but at or above this one, are shown
 /// separately in `check` output as weaker, manually-reviewed candidates.
-const CHECK_WEAK_THRESHOLD: f64 = 0.75;
+/// See `desktop/src-tauri/src/commands.rs`'s copy of this constant for why
+/// it's set equal to the strong-match cutoff.
+const CHECK_WEAK_THRESHOLD: f64 = 0.90;
 
 fn main() {
     if let Err(err) = run() {
@@ -39,10 +41,14 @@ fn run() -> Result<()> {
             author,
             isbn,
             format,
-        } => handle_add(&db, title, author, isbn, format),
+            cover_url,
+        } => handle_add(&db, title, author, isbn, format, cover_url),
         Command::List { source, json } => handle_list(&db, source, json),
         Command::Check { query } => handle_check(&db, &query),
+        Command::CheckBundle { url } => handle_check_bundle(&db, &url),
+        Command::CheckBundles => handle_check_bundles(&db),
         Command::Stats => handle_stats(&db),
+        Command::Enrich => handle_enrich(&db),
         Command::Config { action } => handle_config(action),
         Command::Remove { id } => handle_remove(&db, id),
     }
@@ -59,12 +65,12 @@ fn handle_import(db: &Db, config: &Config, source: ImportSource, verbose: bool) 
             Box::new(sources::humble::Humble { cookie })
         }
         ImportSource::Packt => {
-            let token = config.packt_token.clone().ok_or_else(|| {
+            let cookies = config.packt_cookies.clone().ok_or_else(|| {
                 anyhow::anyhow!(
-                    "no Packt token configured. Run: library config set --packt-token <value>"
+                    "no Packt cookies configured. Run: library config set --packt-cookies <value>"
                 )
             })?;
-            Box::new(sources::packt::Packt { token })
+            Box::new(sources::packt::Packt { cookies })
         }
         ImportSource::Manning => {
             let cookies = config.manning_cookies.clone().ok_or_else(|| {
@@ -132,8 +138,9 @@ fn handle_add(
     authors: Vec<String>,
     isbn: Option<String>,
     formats: Vec<String>,
+    cover_url: Option<String>,
 ) -> Result<()> {
-    let book = sources::manual::build_manual_book(title, authors, isbn, formats);
+    let book = sources::manual::build_manual_book(title, authors, isbn, formats, cover_url);
 
     let existing = db
         .all_books()
@@ -155,10 +162,40 @@ fn handle_add(
 
 fn handle_list(db: &Db, source: Option<String>, json: bool) -> Result<()> {
     let source_filter = source.map(|s| s.parse::<Source>()).transpose()?;
-    let books = db.list_books(source_filter)?;
+
+    // Cross-source duplicates need the whole library to detect, even when
+    // only one source's books are being displayed (e.g. `list --source
+    // packt` should still flag a book also owned via Humble Bundle).
+    let all_books = db.all_books()?;
+    let dup_sources = dedup::cross_source_duplicates(&all_books);
+    let books: Vec<Book> = match source_filter {
+        Some(filter) => all_books
+            .into_iter()
+            .filter(|b| b.source == filter)
+            .collect(),
+        None => all_books,
+    };
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&books)?);
+        let entries = books
+            .iter()
+            .map(|book| {
+                let mut value = serde_json::to_value(book)?;
+                let duplicate_sources: Vec<&str> = book
+                    .id
+                    .and_then(|id| dup_sources.get(&id))
+                    .map(|sources| sources.iter().map(Source::as_str).collect())
+                    .unwrap_or_default();
+                if let serde_json::Value::Object(map) = &mut value {
+                    map.insert(
+                        "duplicate_sources".to_string(),
+                        serde_json::json!(duplicate_sources),
+                    );
+                }
+                Ok(value)
+            })
+            .collect::<Result<Vec<serde_json::Value>>>()?;
+        println!("{}", serde_json::to_string_pretty(&entries)?);
         return Ok(());
     }
 
@@ -175,13 +212,28 @@ fn handle_list(db: &Db, source: Option<String>, json: bool) -> Result<()> {
         let id = book.id.map(|i| i.to_string()).unwrap_or_default();
         let authors = book.authors.join(", ");
         let formats = book.formats.join(",");
+        let dup_note = book
+            .id
+            .and_then(|id| dup_sources.get(&id))
+            .map(|sources| {
+                format!(
+                    "  [also owned via: {}]",
+                    sources
+                        .iter()
+                        .map(Source::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
+            .unwrap_or_default();
         println!(
-            "{:<6} {:<50} {:<14} {:<20} {}",
+            "{:<6} {:<50} {:<14} {:<20} {}{}",
             id,
             truncate(&book.title, 50),
             book.source.to_string(),
             truncate(&authors, 20),
-            formats
+            formats,
+            dup_note
         );
     }
     Ok(())
@@ -213,6 +265,7 @@ fn handle_check(db: &Db, query: &str) -> Result<()> {
         formats: Vec::new(),
         acquired_at: None,
         raw_json: None,
+        cover_url: None,
     };
 
     let existing = db.all_books().context("failed to load existing books")?;
@@ -249,6 +302,76 @@ fn handle_check(db: &Db, query: &str) -> Result<()> {
     Ok(())
 }
 
+fn handle_check_bundle(db: &Db, url: &str) -> Result<()> {
+    let contents = sources::humble::fetch_bundle_contents(url)?;
+    let existing = db.all_books().context("failed to load existing books")?;
+    println!("{}", contents.bundle_name);
+    print_bundle_check(&existing, &contents);
+    Ok(())
+}
+
+fn handle_check_bundles(db: &Db) -> Result<()> {
+    let checks = sources::humble::fetch_all_active_bundles()?;
+    let existing = db.all_books().context("failed to load existing books")?;
+
+    println!("{} bundles currently on humblebundle.com/books", checks.len());
+    for check in &checks {
+        match &check.result {
+            Ok(contents) => {
+                println!("\n{} ({})", contents.bundle_name, check.url);
+                print_bundle_check(&existing, contents);
+            }
+            Err(e) => println!("\n{} \u{2014} error: {e}", check.url),
+        }
+    }
+    Ok(())
+}
+
+/// Scores every item in `contents` against `existing` and prints one line
+/// per book plus an owned-count summary -- shared by `handle_check_bundle`
+/// and `handle_check_bundles` (one bundle vs. every bundle currently on
+/// sale) so both print identically.
+fn print_bundle_check(existing: &[Book], contents: &sources::humble::BundleContents) {
+    let mut owned_count = 0;
+    for item in &contents.items {
+        let candidate = Book {
+            id: None,
+            title: item.title.clone(),
+            authors: item.authors.clone(),
+            isbn: None,
+            source: Source::Manual,
+            source_id: None,
+            formats: Vec::new(),
+            acquired_at: None,
+            raw_json: None,
+            cover_url: None,
+        };
+        let matches =
+            dedup::find_duplicates_with_threshold(existing, &candidate, CHECK_WEAK_THRESHOLD);
+        let (strong, weak): (Vec<_>, Vec<_>) =
+            matches.into_iter().partition(|m| m.confidence >= 0.90);
+
+        if let Some(m) = strong.first() {
+            owned_count += 1;
+            println!(
+                "  [owned] {} \u{2014} matches '{}' from {} (confidence {:.2})",
+                item.title, m.book.title, m.book.source, m.confidence
+            );
+        } else if let Some(m) = weak.first() {
+            println!(
+                "  [maybe] {} \u{2014} possible match to '{}' from {} (confidence {:.2})",
+                item.title, m.book.title, m.book.source, m.confidence
+            );
+        } else {
+            println!("  [new]   {}", item.title);
+        }
+    }
+    println!(
+        "{owned_count} of {} books look like ones you already own",
+        contents.items.len()
+    );
+}
+
 fn handle_stats(db: &Db) -> Result<()> {
     let stats = db.stats()?;
     let total: i64 = stats.iter().map(|(_, count)| count).sum();
@@ -265,15 +388,28 @@ fn handle_stats(db: &Db) -> Result<()> {
     Ok(())
 }
 
+fn handle_enrich(db: &Db) -> Result<()> {
+    let summary = library_core::enrich::enrich_missing(db)?;
+    if summary.checked == 0 {
+        println!("nothing missing authors or an ISBN");
+        return Ok(());
+    }
+    println!(
+        "checked {}, updated {}, no match {}, errors {}",
+        summary.checked, summary.updated, summary.not_found, summary.errors
+    );
+    Ok(())
+}
+
 fn handle_config(action: ConfigAction) -> Result<()> {
     let ConfigAction::Set {
         humble_cookie,
-        packt_token,
+        packt_cookies,
         manning_cookies,
     } = action;
 
-    if humble_cookie.is_none() && packt_token.is_none() && manning_cookies.is_none() {
-        bail!("nothing to set: pass at least one of --humble-cookie, --packt-token, --manning-cookies");
+    if humble_cookie.is_none() && packt_cookies.is_none() && manning_cookies.is_none() {
+        bail!("nothing to set: pass at least one of --humble-cookie, --packt-cookies, --manning-cookies");
     }
 
     let mut config = Config::load()?;
@@ -283,9 +419,9 @@ fn handle_config(action: ConfigAction) -> Result<()> {
         config.humble_cookie = Some(value);
         changed.push("humble_cookie");
     }
-    if let Some(value) = packt_token {
-        config.packt_token = Some(value);
-        changed.push("packt_token");
+    if let Some(value) = packt_cookies {
+        config.packt_cookies = Some(value);
+        changed.push("packt_cookies");
     }
     if let Some(value) = manning_cookies {
         config.manning_cookies = Some(value);

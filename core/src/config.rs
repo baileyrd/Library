@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub humble_cookie: Option<String>,
-    pub packt_token: Option<String>,
+    pub packt_cookies: Option<String>,
     pub manning_cookies: Option<String>,
     pub db_path: Option<PathBuf>,
 }
@@ -83,7 +83,7 @@ mod tests {
 
         let config = Config {
             humble_cookie: Some("abc123".to_string()),
-            packt_token: Some("jwt.token.here".to_string()),
+            packt_cookies: Some("packt_session=abc; XSRF-TOKEN=def".to_string()),
             manning_cookies: None,
             db_path: Some(PathBuf::from("/tmp/library.db")),
         };
@@ -92,7 +92,7 @@ mod tests {
         let parsed = Config::load_from(&config_path).unwrap();
 
         assert_eq!(parsed.humble_cookie, config.humble_cookie);
-        assert_eq!(parsed.packt_token, config.packt_token);
+        assert_eq!(parsed.packt_cookies, config.packt_cookies);
         assert_eq!(parsed.manning_cookies, config.manning_cookies);
         assert_eq!(parsed.db_path, config.db_path);
     }
@@ -145,7 +145,7 @@ mod tests {
     fn default_config_has_no_secrets() {
         let config = Config::default();
         assert!(config.humble_cookie.is_none());
-        assert!(config.packt_token.is_none());
+        assert!(config.packt_cookies.is_none());
         assert!(config.manning_cookies.is_none());
     }
 }

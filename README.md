@@ -44,11 +44,11 @@ need devtools either. The easiest path is the desktop app
 open Settings and click "Sign in automatically" next to each source. It opens
 a real embedded browser window on that site's own login page; once you're
 logged in the session is read straight out of the window and saved to config
-for you (Humble Bundle and Manning additionally show a small "I'm logged in"
-button in the window itself, since neither reliably signals a completed
-login through cookies alone). The CLI and desktop app share the same
-`config.toml`, so signing in once in the desktop app is enough even if you
-only ever use the CLI afterwards.
+for you (Humble Bundle, Packt, and Manning additionally show a small "I'm
+logged in" button in the window itself, since none of them reliably signals
+a completed login through cookies alone). The CLI and desktop app share the
+same `config.toml`, so signing in once in the desktop app is enough even if
+you only ever use the CLI afterwards.
 
 If you'd rather not run the desktop app, or the automatic flow ever breaks
 against a site change, each source can still be set manually by pulling the
@@ -64,16 +64,20 @@ value out of your own browser's devtools:
 
 ### Packt
 
-1. Log into subscription.packtpub.com / packtpub.com in your browser.
-2. Open devtools -> Network tab, then trigger any request to
-   `services.packtpub.com` (e.g. browse your library).
-3. Find the `Authorization: Bearer <token>` request header and copy the
-   token (the part after `Bearer `).
-4. `library config set --packt-token '<value>'`
+1. Log into subscription.packtpub.com in your browser.
+2. Open devtools -> Application (Chrome) or Storage (Firefox) -> Cookies ->
+   `https://subscription.packtpub.com`.
+3. Copy the `packt_session` and `XSRF-TOKEN` cookie pairs and join them with
+   `; ` into one string (`packt_session=<value>; XSRF-TOKEN=<value>`) --
+   both are required; the API rejects requests missing either.
+4. `library config set --packt-cookies '<value>'`
 
-Note: Packt's API shape here was reverse-engineered from third-party
-research, not official documentation, and may need adjustment if Packt
-changes their API.
+Note: Packt migrated its owned-books API from `services.packtpub.com`
+(bearer-token auth) to `subscription.packtpub.com/api/entitlements`
+(cookie + CSRF-token auth) at some point after 2020; this tool follows the
+current scheme, reverse-engineered from third-party research rather than
+official documentation, and may need adjustment again if Packt changes
+their API.
 
 ### Manning
 
@@ -126,7 +130,7 @@ library import kindle --file mybooks.csv
 
 # Add a book you own but that isn't from one of the above sources
 library add --title "Programming Rust" --author "Jim Blandy" --author "Jason Orendorff" \
-  --isbn 9781492052548 --format epub --format pdf
+  --isbn 9781492052548 --format epub --format pdf --cover-url "https://example.com/cover.jpg"
 
 # List everything, or filter by source
 library list
@@ -136,6 +140,8 @@ library list --json
 # Check before buying
 library check "Programming Rust"
 library check 9781492052548
+library check-bundle https://www.humblebundle.com/books/some-bundle
+library check-bundles   # discover and check every bundle on humblebundle.com/books right now
 
 # See counts per source
 library stats
@@ -159,7 +165,10 @@ invocation; `-v` / `--verbose` prints extra diagnostics to stderr.
 - **Humble Bundle**: uses the documented (if unofficial and possibly
   deprecated) `/api/v1/user/order` + `/api/v1/order/{gamekey}` endpoints.
   TODO: if Humble Bundle drops this API, fall back to scraping the embedded
-  JSON on the `/home/library` HTML page instead.
+  JSON on the `/home/library` HTML page instead. Its API also has no real
+  cover art -- `subproducts[].icon` is a 70x70 UI badge, not a book cover --
+  so `cover_url` is left empty and, like Manning/Kindle below, relies on
+  metadata enrichment (by ISBN, against Open Library) to fill it in.
 - **Packt**: entitlements API shape is based on historical-but-corroborated
   third-party research; the exact response shape may have drifted since.
   Formats are not fetched per-book (would require an extra API round-trip

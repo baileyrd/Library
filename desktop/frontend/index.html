@@ -29,11 +29,18 @@
             <option value="manual">Manual</option>
           </select>
           <span id="stats-line" class="stats-line"></span>
+          <span id="enrich-status" class="enrich-status"></span>
+          <div class="view-toggle">
+            <button id="view-list-btn" class="toggle-btn active" data-view-mode="list">List</button>
+            <button id="view-grid-btn" class="toggle-btn" data-view-mode="grid">Grid</button>
+          </div>
+          <button id="enrich-btn">Fill missing metadata</button>
           <button id="add-book-btn" class="primary">+ Add book</button>
         </div>
-        <table class="book-table">
+        <table id="book-table" class="book-table">
           <thead>
             <tr>
+              <th></th>
               <th>Title</th>
               <th>Authors</th>
               <th>Source</th>
@@ -44,6 +51,7 @@
           </thead>
           <tbody id="book-rows"></tbody>
         </table>
+        <div id="book-grid" class="book-grid hidden"></div>
         <p id="books-empty" class="empty hidden">No books yet. Add one or import from a source.</p>
       </section>
 
@@ -55,6 +63,18 @@
           <button id="check-btn" class="primary">Check</button>
         </div>
         <div id="check-results"></div>
+
+        <h2>Check a Humble Bundle</h2>
+        <p class="hint">
+          Paste a bundle page URL (e.g. humblebundle.com/books/some-bundle) to see which of
+          its books you already own.
+        </p>
+        <div class="toolbar">
+          <input id="bundle-url" type="text" placeholder="https://www.humblebundle.com/books/..." />
+          <button id="bundle-check-btn" class="primary">Check bundle</button>
+          <button id="active-bundles-check-btn">Check against current bundles</button>
+        </div>
+        <div id="bundle-check-results"></div>
       </section>
 
       <section id="view-import" class="view">
@@ -100,7 +120,7 @@
             <div class="cred-label">Packt <span id="status-packt" class="status-pill"></span></div>
             <div class="cred-actions">
               <button data-capture="packt" class="capture-btn">Sign in automatically</button>
-              <input id="cred-packt" type="password" placeholder="or paste bearer token" />
+              <input id="cred-packt" type="password" placeholder="or paste cookie jar string" />
             </div>
           </div>
           <div class="cred-row">
@@ -115,6 +135,44 @@
         <p id="settings-status" class="hint"></p>
         <p class="hint db-path">Database: <code id="db-path"></code></p>
       </section>
+
+      <section id="view-book" class="view">
+        <button id="book-detail-back" class="link-btn">&larr; Back to Books</button>
+        <div class="book-detail">
+          <div class="book-detail-cover">
+            <img id="book-detail-cover-img" alt="" class="hidden" />
+            <div id="book-detail-cover-fallback" class="book-detail-cover-fallback hidden"></div>
+          </div>
+          <div class="book-detail-info">
+            <h2 id="book-detail-title"></h2>
+            <p id="book-detail-authors" class="hint"></p>
+            <dl class="book-detail-facts">
+              <dt>Source</dt>
+              <dd id="book-detail-source"></dd>
+              <dt>ISBN</dt>
+              <dd id="book-detail-isbn"></dd>
+              <dt>Formats</dt>
+              <dd id="book-detail-formats"></dd>
+              <dt>Acquired</dt>
+              <dd id="book-detail-acquired"></dd>
+              <dt>Source ID</dt>
+              <dd id="book-detail-source-id"></dd>
+            </dl>
+            <div class="modal-actions">
+              <button id="book-detail-edit">Edit</button>
+              <button id="book-detail-remove" class="danger">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <h3>Also owned via another source</h3>
+        <div id="book-detail-duplicates"></div>
+
+        <details id="book-detail-raw-wrap" class="hidden">
+          <summary>Raw source data</summary>
+          <pre id="book-detail-raw"></pre>
+        </details>
+      </section>
     </main>
   </div>
 
@@ -125,6 +183,7 @@
       <label>Authors (comma-separated) <input id="field-authors" type="text" /></label>
       <label>ISBN <input id="field-isbn" type="text" /></label>
       <label>Formats (comma-separated) <input id="field-formats" type="text" /></label>
+      <label>Cover URL <input id="field-cover-url" type="text" /></label>
       <div id="modal-warnings"></div>
       <div class="modal-actions">
         <button id="modal-cancel">Cancel</button>

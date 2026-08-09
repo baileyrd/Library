@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri::{Manager, State};
 
 use library_core::dedup::{self, DedupMatch};
+use library_core::enrich::{self, EnrichSummary};
 use library_core::model::{Book, Source};
 use library_core::sources::capture::{self, CaptureSpec};
 use library_core::sources::{self, Source as SourceFetcher};
@@ -10,27 +11,113 @@ use crate::state::AppState;
 
 /// Fuzzy matches below this confidence, but at or above this one, are
 /// returned separately as weaker, manually-reviewed candidates -- mirrors
-/// the CLI's `check` command threshold.
-const CHECK_WEAK_THRESHOLD: f64 = 0.75;
+/// the CLI's `check` command threshold. Set equal to the 0.90 strong-match
+/// cutoff used below (real data check: every weak-bucket match sampled in
+/// the 0.75-0.90 range was a false positive from generic shared title
+/// words like "Mastering"/"Learning" scoring high on Jaro-Winkler's
+/// prefix bonus -- every genuine duplicate already scored >= 0.90). This
+/// makes the "weak" bucket structurally always empty for now; left in
+/// place rather than removed since it's a one-line reversion if a real
+/// gap between the two cutoffs turns out to be wanted later.
+const CHECK_WEAK_THRESHOLD: f64 = 0.90;
 
+/// Renders the full anyhow cause chain, not just the top-level message --
+/// `anyhow::Error::to_string()` alone drops context added via `.context()`/
+/// `.with_context()` further down the chain (e.g. a fetch error's response
+/// body snippet), which would otherwise never reach the UI.
 fn err(e: anyhow::Error) -> String {
-    e.to_string()
+    let mut msg = e.to_string();
+    for cause in e.chain().skip(1) {
+        msg.push_str(&format!(" -- caused by: {cause}"));
+    }
+    msg
+}
+
+#[derive(Serialize)]
+pub struct BookListEntry {
+    #[serde(flatten)]
+    book: Book,
+    /// Other sources that also appear to own this title, computed across
+    /// the whole library -- surfaces the same signal `import_source`'s
+    /// one-shot duplicate warning uses, but persistently in the list
+    /// instead of only in a toast that's gone once dismissed.
+    duplicate_sources: Vec<Source>,
 }
 
 #[tauri::command]
-pub fn list_books(state: State<AppState>, source: Option<String>) -> Result<Vec<Book>, String> {
+pub fn list_books(
+    state: State<AppState>,
+    source: Option<String>,
+) -> Result<Vec<BookListEntry>, String> {
     let source_filter = source
         .map(|s| s.parse::<Source>())
         .transpose()
         .map_err(err)?;
     let db = state.db.lock();
-    db.list_books(source_filter).map_err(err)
+
+    // Cross-source duplicates need the whole library to detect, even when
+    // only one source's books are being displayed.
+    let all_books = db.all_books().map_err(err)?;
+    let dup_sources = dedup::cross_source_duplicates(&all_books);
+    let books = match source_filter {
+        Some(filter) => all_books
+            .into_iter()
+            .filter(|b| b.source == filter)
+            .collect(),
+        None => all_books,
+    };
+
+    Ok(books
+        .into_iter()
+        .map(|book| {
+            let duplicate_sources = book
+                .id
+                .and_then(|id| dup_sources.get(&id))
+                .cloned()
+                .unwrap_or_default();
+            BookListEntry {
+                book,
+                duplicate_sources,
+            }
+        })
+        .collect())
 }
 
 #[tauri::command]
 pub fn get_book(state: State<AppState>, id: i64) -> Result<Option<Book>, String> {
     let db = state.db.lock();
     db.get_book(id).map_err(err)
+}
+
+#[derive(Serialize)]
+pub struct BookDetail {
+    #[serde(flatten)]
+    book: Book,
+    /// Other books in the library that look like the same title from a
+    /// different source -- the same signal `list_books`' compact
+    /// `duplicate_sources` badge uses, but with full match detail (which
+    /// book, confidence, why) for the detail page instead of just source
+    /// names.
+    duplicates: Vec<DedupMatch>,
+}
+
+#[tauri::command]
+pub fn get_book_detail(state: State<AppState>, id: i64) -> Result<Option<BookDetail>, String> {
+    let db = state.db.lock();
+    let Some(book) = db.get_book(id).map_err(err)? else {
+        return Ok(None);
+    };
+    let others: Vec<Book> = db
+        .all_books()
+        .map_err(err)?
+        .into_iter()
+        .filter(|b| b.id != Some(id))
+        .collect();
+    let duplicates = dedup::find_duplicates(&others, &book)
+        .into_iter()
+        .filter(|m| m.book.source != book.source)
+        .collect();
+    Ok(Some(BookDetail { book, duplicates }))
 }
 
 #[tauri::command]
@@ -40,10 +127,11 @@ pub fn add_book(
     authors: Vec<String>,
     isbn: Option<String>,
     formats: Vec<String>,
+    cover_url: Option<String>,
 ) -> Result<AddBookResult, String> {
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
-    let candidate = sources::manual::build_manual_book(title, authors, isbn, formats);
+    let candidate = sources::manual::build_manual_book(title, authors, isbn, formats, cover_url);
     let warnings = dedup::find_duplicates(&existing, &candidate);
 
     let outcome = db.upsert_book(&candidate).map_err(err)?;
@@ -73,10 +161,18 @@ pub fn update_book(
     authors: Vec<String>,
     isbn: Option<String>,
     formats: Vec<String>,
+    cover_url: Option<String>,
 ) -> Result<Book, String> {
     let db = state.db.lock();
     let changed = db
-        .update_book(id, &title, &authors, isbn.as_deref(), &formats)
+        .update_book(
+            id,
+            &title,
+            &authors,
+            isbn.as_deref(),
+            &formats,
+            cover_url.as_deref(),
+        )
         .map_err(err)?;
     if !changed {
         return Err(format!("no book with id {id}"));
@@ -117,6 +213,7 @@ pub fn check_duplicates(state: State<AppState>, query: String) -> Result<CheckRe
         formats: Vec::new(),
         acquired_at: None,
         raw_json: None,
+        cover_url: None,
     };
 
     let db = state.db.lock();
@@ -128,6 +225,121 @@ pub fn check_duplicates(state: State<AppState>, query: String) -> Result<CheckRe
     Ok(CheckResult { strong, weak })
 }
 
+#[derive(Serialize)]
+pub struct BundleCheckItem {
+    title: String,
+    authors: Vec<String>,
+    strong: Vec<DedupMatch>,
+    weak: Vec<DedupMatch>,
+}
+
+#[derive(Serialize)]
+pub struct BundleCheckResult {
+    url: String,
+    bundle_name: String,
+    items: Vec<BundleCheckItem>,
+    /// Set when this specific bundle's fetch/parse failed -- `items` is
+    /// empty in that case. Only meaningful from `check_active_bundles`,
+    /// which tolerates one bad bundle without failing the whole batch;
+    /// `check_bundle_url` fails the command outright instead, since
+    /// there's nothing else to report alongside a single explicit check.
+    error: Option<String>,
+}
+
+/// Scores every book in `contents` against `existing` with the same
+/// title/ISBN dedup logic `check_duplicates` uses for a single query.
+fn score_bundle(existing: &[Book], url: String, contents: sources::humble::BundleContents) -> BundleCheckResult {
+    let items = contents
+        .items
+        .into_iter()
+        .map(|item| {
+            let candidate = Book {
+                id: None,
+                title: item.title.clone(),
+                authors: item.authors.clone(),
+                isbn: None,
+                source: Source::Manual,
+                source_id: None,
+                formats: Vec::new(),
+                acquired_at: None,
+                raw_json: None,
+                cover_url: None,
+            };
+            let matches =
+                dedup::find_duplicates_with_threshold(existing, &candidate, CHECK_WEAK_THRESHOLD);
+            let (strong, weak): (Vec<_>, Vec<_>) =
+                matches.into_iter().partition(|m| m.confidence >= 0.90);
+            BundleCheckItem {
+                title: item.title,
+                authors: item.authors,
+                strong,
+                weak,
+            }
+        })
+        .collect();
+
+    BundleCheckResult {
+        url,
+        bundle_name: contents.bundle_name,
+        items,
+        error: None,
+    }
+}
+
+/// Checks every book in a public Humble Bundle bundle page against the
+/// library, so a whole bundle can be screened for "do I already own any of
+/// these?" before buying instead of pasting titles into `check_duplicates`
+/// one at a time. Needs no Humble session -- bundle contents are a public
+/// page, unlike `import_source`'s owned-order fetch.
+#[tauri::command]
+pub fn check_bundle_url(state: State<AppState>, url: String) -> Result<BundleCheckResult, String> {
+    let contents = sources::humble::fetch_bundle_contents(&url).map_err(err)?;
+    let db = state.db.lock();
+    let existing = db.all_books().map_err(err)?;
+    Ok(score_bundle(&existing, url, contents))
+}
+
+/// Discovers every bundle currently listed on humblebundle.com/books and
+/// checks all of them at once -- the one-click version of
+/// `check_bundle_url` for "is anything on sale right now something I
+/// already own?" instead of finding and pasting each bundle's URL by hand.
+/// One bundle's fetch/parse failure is reported inline via that bundle's
+/// `error` field rather than failing the whole batch (see
+/// `sources::humble::fetch_all_active_bundles`); only a failure to list
+/// the bundles at all fails the command.
+#[tauri::command]
+pub fn check_active_bundles(state: State<AppState>) -> Result<Vec<BundleCheckResult>, String> {
+    let checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
+    let db = state.db.lock();
+    let existing = db.all_books().map_err(err)?;
+
+    Ok(checks
+        .into_iter()
+        .map(|check| match check.result {
+            Ok(contents) => score_bundle(&existing, check.url, contents),
+            Err(e) => BundleCheckResult {
+                url: check.url,
+                bundle_name: String::new(),
+                items: Vec::new(),
+                error: Some(err(e)),
+            },
+        })
+        .collect())
+}
+
+/// Opens `url` in the OS's default browser -- used for "open this on
+/// humblebundle.com" links from the bundle checkers, since a plain `<a
+/// href>` inside the webview would navigate the app's own window away
+/// instead of launching an external browser. Scheme-restricted to http(s)
+/// so this can't be repurposed to open an arbitrary local path.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("refusing to open a non-http(s) URL".to_string());
+    }
+    open::that(&url).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn stats(state: State<AppState>) -> Result<Vec<(Source, i64)>, String> {
     let db = state.db.lock();
@@ -137,7 +349,7 @@ pub fn stats(state: State<AppState>) -> Result<Vec<(Source, i64)>, String> {
 #[derive(Serialize)]
 pub struct ConfigStatus {
     humble_cookie_set: bool,
-    packt_token_set: bool,
+    packt_cookies_set: bool,
     manning_cookies_set: bool,
     db_path: String,
 }
@@ -147,7 +359,7 @@ pub fn get_config_status(state: State<AppState>) -> ConfigStatus {
     let config = state.config.lock();
     ConfigStatus {
         humble_cookie_set: config.humble_cookie.is_some(),
-        packt_token_set: config.packt_token.is_some(),
+        packt_cookies_set: config.packt_cookies.is_some(),
         manning_cookies_set: config.manning_cookies.is_some(),
         db_path: config.resolve_db_path().display().to_string(),
     }
@@ -158,7 +370,7 @@ pub fn set_credential(state: State<AppState>, field: String, value: String) -> R
     let mut config = state.config.lock();
     match field.as_str() {
         "humble_cookie" => config.humble_cookie = Some(value),
-        "packt_token" => config.packt_token = Some(value),
+        "packt_cookies" => config.packt_cookies = Some(value),
         "manning_cookies" => config.manning_cookies = Some(value),
         other => return Err(format!("unknown credential field '{other}'")),
     }
@@ -189,12 +401,12 @@ pub fn import_source(
             Box::new(sources::humble::Humble { cookie })
         }
         "packt" => {
-            let token = {
+            let cookies = {
                 let config = state.config.lock();
-                config.packt_token.clone()
+                config.packt_cookies.clone()
             }
-            .ok_or_else(|| "no Packt token configured".to_string())?;
-            Box::new(sources::packt::Packt { token })
+            .ok_or_else(|| "no Packt cookies configured".to_string())?;
+            Box::new(sources::packt::Packt { cookies })
         }
         "manning" => {
             let cookies = {
@@ -275,12 +487,13 @@ pub async fn capture_credential(
         .login_url
         .parse::<tauri::Url>()
         .map_err(|e| e.to_string())?;
-    let window = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(login_url))
-        .title(format!("Library \u{2014} sign in to {}", spec.label))
-        .inner_size(480.0, 760.0)
-        .initialization_script(&capture::injected_script(spec))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let window =
+        tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(login_url))
+            .title(format!("Library \u{2014} sign in to {}", spec.label))
+            .inner_size(480.0, 760.0)
+            .initialization_script(&capture::injected_script(spec))
+            .build()
+            .map_err(|e| e.to_string())?;
 
     let domains = spec
         .cookie_domains
@@ -349,7 +562,7 @@ pub async fn capture_credential(
             let mut config = state.config.lock();
             match spec.source {
                 "humble_bundle" => config.humble_cookie = Some(value),
-                "packt" => config.packt_token = Some(value),
+                "packt" => config.packt_cookies = Some(value),
                 "manning" => config.manning_cookies = Some(value),
                 other => return Err(format!("no config field wired up for source '{other}'")),
             }
@@ -358,4 +571,15 @@ pub async fn capture_credential(
         }
         None => Ok(CaptureResult { cancelled: true }),
     }
+}
+
+/// Looks up authors/ISBN for every book missing either, via
+/// `library_core::enrich`. Synchronous like `import_source` -- Tauri runs
+/// commands off the main thread by default, and this can take a while for
+/// a large library (paced network requests), so the frontend shows a
+/// busy state while it runs rather than blocking the UI thread.
+#[tauri::command]
+pub fn enrich_metadata(state: State<AppState>) -> Result<EnrichSummary, String> {
+    let db = state.db.lock();
+    enrich::enrich_missing(&db).map_err(err)
 }
