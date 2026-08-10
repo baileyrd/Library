@@ -292,8 +292,17 @@ fn score_bundle(existing: &[Book], url: String, contents: sources::humble::Bundl
 /// one at a time. Needs no Humble session -- bundle contents are a public
 /// page, unlike `import_source`'s owned-order fetch.
 #[tauri::command]
-pub fn check_bundle_url(state: State<AppState>, url: String) -> Result<BundleCheckResult, String> {
-    let contents = sources::humble::fetch_bundle_contents(&url).map_err(err)?;
+pub fn check_bundle_url(
+    state: State<AppState>,
+    url: String,
+    exclude_fiction: bool,
+) -> Result<BundleCheckResult, String> {
+    let mut contents = sources::humble::fetch_bundle_contents(&url).map_err(err)?;
+    if exclude_fiction {
+        contents
+            .items
+            .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
+    }
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
     Ok(score_bundle(&existing, url, contents))
@@ -308,7 +317,10 @@ pub fn check_bundle_url(state: State<AppState>, url: String) -> Result<BundleChe
 /// `sources::humble::fetch_all_active_bundles`); only a failure to list
 /// the bundles at all fails the command.
 #[tauri::command]
-pub fn check_active_bundles(state: State<AppState>) -> Result<Vec<BundleCheckResult>, String> {
+pub fn check_active_bundles(
+    state: State<AppState>,
+    exclude_fiction: bool,
+) -> Result<Vec<BundleCheckResult>, String> {
     let checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
@@ -316,7 +328,14 @@ pub fn check_active_bundles(state: State<AppState>) -> Result<Vec<BundleCheckRes
     Ok(checks
         .into_iter()
         .map(|check| match check.result {
-            Ok(contents) => score_bundle(&existing, check.url, contents),
+            Ok(mut contents) => {
+                if exclude_fiction {
+                    contents
+                        .items
+                        .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
+                }
+                score_bundle(&existing, check.url, contents)
+            }
             Err(e) => BundleCheckResult {
                 url: check.url,
                 bundle_name: String::new(),

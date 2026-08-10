@@ -403,7 +403,8 @@ async function runBundleCheck() {
   btn.textContent = "Checking\u2026";
   results.innerHTML = "";
   try {
-    const result = await invoke("check_bundle_url", { url });
+    const excludeFiction = document.getElementById("exclude-fiction").checked;
+    const result = await invoke("check_bundle_url", { url, excludeFiction });
     results.innerHTML = bundleResultBlock(result);
     wireBundleCheckLinks();
   } catch (e) {
@@ -421,7 +422,8 @@ async function runActiveBundlesCheck() {
   btn.textContent = "Checking current bundles\u2026";
   results.innerHTML = `<p class="hint">Fetching every bundle currently on humblebundle.com/books\u2026 this checks each one in turn, so it can take a little while.</p>`;
   try {
-    const bundleResults = await invoke("check_active_bundles");
+    const excludeFiction = document.getElementById("exclude-fiction").checked;
+    const bundleResults = await invoke("check_active_bundles", { excludeFiction });
     const okResults = bundleResults.filter((r) => !r.error);
     const ownedCount = okResults.reduce(
       (sum, r) => sum + r.items.filter((item) => item.strong.length > 0).length,

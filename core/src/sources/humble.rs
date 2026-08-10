@@ -197,6 +197,50 @@ pub struct BundleContents {
     pub items: Vec<BundleItem>,
 }
 
+/// Keyword list backing [`is_fiction_or_comic`] -- Humble Bundle's own
+/// order API and bundle pages (see the module doc comment) expose no
+/// genre/category field at all, so filtering fiction/comics out of
+/// `check-bundle`/`check-bundles` results has nothing to go on but title
+/// text. This is a best-effort heuristic, not a reliable classifier: it
+/// will miss unlabeled fiction and can occasionally flag a non-fiction
+/// title that happens to share a word (e.g. "Fantasy Football
+/// Analytics"). Single words are matched whole-word (see
+/// `is_fiction_or_comic`); multi-word phrases are matched as substrings.
+const FICTION_OR_COMIC_KEYWORDS: &[&str] = &[
+    "comic",
+    "comics",
+    "graphic novel",
+    "manga",
+    "novel",
+    "trilogy",
+    "saga",
+    "chronicles",
+    "fantasy",
+    "science fiction",
+    "sci-fi",
+    "scifi",
+    "thriller",
+    "short stories",
+];
+
+/// Best-effort check for whether `title` reads as fiction or a
+/// comic/graphic novel, from its title text alone. See
+/// `FICTION_OR_COMIC_KEYWORDS`.
+pub fn is_fiction_or_comic(title: &str) -> bool {
+    let lower = title.to_lowercase();
+    let words: std::collections::HashSet<&str> = lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    FICTION_OR_COMIC_KEYWORDS.iter().any(|kw| {
+        if kw.chars().all(|c| c.is_alphanumeric()) {
+            words.contains(kw)
+        } else {
+            lower.contains(kw)
+        }
+    })
+}
+
 #[derive(Debug, Deserialize)]
 struct BundlePageData {
     #[serde(rename = "bundleData")]
@@ -674,5 +718,25 @@ mod tests {
     fn non_listing_page_errors_instead_of_panicking() {
         let result = parse_active_bundle_urls("<html><body>not a listing page</body></html>");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn flags_comics_and_fiction_titles() {
+        assert!(is_fiction_or_comic("Batman: The Long Halloween (Comics)"));
+        assert!(is_fiction_or_comic("Saga, Vol. 1 (Graphic Novel)"));
+        assert!(is_fiction_or_comic("Neuromancer: A Novel"));
+        assert!(is_fiction_or_comic("The Fantasy & Science Fiction Megapack"));
+        assert!(is_fiction_or_comic("Attack on Titan Manga Collection"));
+        assert!(is_fiction_or_comic("Best Sci-Fi Short Story Collection"));
+    }
+
+    #[test]
+    fn leaves_technical_titles_alone() {
+        // "fantasy" is a known false-positive source by design (see
+        // `FICTION_OR_COMIC_KEYWORDS`'s doc comment) -- a title like
+        // "Fantasy Football Analytics" is intentionally not covered here.
+        assert!(!is_fiction_or_comic("Programming Rust"));
+        assert!(!is_fiction_or_comic("Rust in Action"));
+        assert!(!is_fiction_or_comic("Kubernetes Patterns"));
     }
 }

@@ -69,10 +69,20 @@ pub enum Command {
     CheckBundle {
         /// A humblebundle.com books bundle URL, e.g. https://www.humblebundle.com/books/<slug>.
         url: String,
+
+        /// Skip books that look like fiction or a comic/graphic novel (best-effort
+        /// title match -- Humble Bundle exposes no genre data to check against).
+        #[arg(long)]
+        exclude_fiction: bool,
     },
 
     /// Discover every bundle currently on humblebundle.com/books and check all of them.
-    CheckBundles,
+    CheckBundles {
+        /// Skip books that look like fiction or a comic/graphic novel (best-effort
+        /// title match -- Humble Bundle exposes no genre data to check against).
+        #[arg(long)]
+        exclude_fiction: bool,
+    },
 
     /// Print per-source book counts and the total.
     Stats,

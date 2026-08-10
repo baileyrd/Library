@@ -141,7 +141,9 @@ library list --json
 library check "Programming Rust"
 library check 9781492052548
 library check-bundle https://www.humblebundle.com/books/some-bundle
+library check-bundle https://www.humblebundle.com/books/some-bundle --exclude-fiction
 library check-bundles   # discover and check every bundle on humblebundle.com/books right now
+library check-bundles --exclude-fiction   # same, skipping titles that look like fiction/comics
 
 # See counts per source
 library stats
@@ -168,7 +170,11 @@ invocation; `-v` / `--verbose` prints extra diagnostics to stderr.
   JSON on the `/home/library` HTML page instead. Its API also has no real
   cover art -- `subproducts[].icon` is a 70x70 UI badge, not a book cover --
   so `cover_url` is left empty and, like Manning/Kindle below, relies on
-  metadata enrichment (by ISBN, against Open Library) to fill it in.
+  metadata enrichment (by ISBN, against Open Library) to fill it in. Its
+  bundle pages expose no genre/category field either, so `check-bundle`/
+  `check-bundles --exclude-fiction` filters on a title-keyword heuristic
+  (`sources::humble::is_fiction_or_comic`) rather than real genre data —
+  best-effort, not exact.
 - **Packt**: entitlements API shape is based on historical-but-corroborated
   third-party research; the exact response shape may have drifted since.
   Formats are not fetched per-book (would require an extra API round-trip

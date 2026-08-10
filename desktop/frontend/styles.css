@@ -57,6 +57,16 @@ main { flex: 1; overflow: auto; padding: 1.5rem; }
 
 .toolbar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
 
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
 .stats-line { color: var(--text-muted); font-size: 0.85rem; flex: 1; }
 
 select, input[type="text"], input[type="password"] {
