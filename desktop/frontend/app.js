@@ -442,15 +442,16 @@ async function runActiveBundlesCheck() {
 }
 
 function bundleResultBlock(result) {
-  const heading = `<button type="button" class="link-btn inline bundle-link" data-url="${escapeHtml(result.url)}">${escapeHtml(result.error ? result.url : result.bundle_name)}</button>`;
+  const name = escapeHtml(result.error ? result.url : result.bundle_name);
+  const openBtn = `<button type="button" class="link-btn inline bundle-open-btn" data-url="${escapeHtml(result.url)}" title="Open bundle page" aria-label="Open bundle page">\u2197</button>`;
+  const header = `<h3 class="bundle-group-header"><button type="button" class="bundle-toggle-btn" aria-expanded="true"><span class="chevron">\u25be</span> ${name}</button>${openBtn}</h3>`;
   if (result.error) {
-    return `<h3>${heading}</h3><div class="match-card">Error: ${escapeHtml(result.error)}</div>`;
+    return `<div class="bundle-group">${header}<div class="bundle-group-body"><div class="match-card">Error: ${escapeHtml(result.error)}</div></div></div>`;
   }
   const ownedCount = result.items.filter((item) => item.strong.length > 0).length;
-  let html = `<h3>${heading}</h3>`;
-  html += `<p class="hint">${ownedCount} of ${result.items.length} books look like ones you already own.</p>`;
-  html += result.items.map(bundleItemCard).join("");
-  return html;
+  let body = `<p class="hint">${ownedCount} of ${result.items.length} books look like ones you already own.</p>`;
+  body += result.items.map(bundleItemCard).join("");
+  return `<div class="bundle-group">${header}<div class="bundle-group-body">${body}</div></div>`;
 }
 
 function matchLinks(matches) {
@@ -478,8 +479,18 @@ function wireBundleCheckLinks() {
   document.querySelectorAll("#bundle-check-results .book-link").forEach((btn) => {
     btn.addEventListener("click", () => openBookDetail(Number(btn.dataset.id)));
   });
-  document.querySelectorAll("#bundle-check-results .bundle-link").forEach((btn) => {
-    btn.addEventListener("click", () => invoke("open_url", { url: btn.dataset.url }));
+  document.querySelectorAll("#bundle-check-results .bundle-open-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      invoke("open_url", { url: btn.dataset.url });
+    });
+  });
+  document.querySelectorAll("#bundle-check-results .bundle-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".bundle-group");
+      const collapsed = group.classList.toggle("collapsed");
+      btn.setAttribute("aria-expanded", String(!collapsed));
+    });
   });
 }
 
