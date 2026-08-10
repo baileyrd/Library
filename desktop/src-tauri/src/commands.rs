@@ -321,7 +321,14 @@ pub fn check_active_bundles(
     state: State<AppState>,
     exclude_fiction: bool,
 ) -> Result<Vec<BundleCheckResult>, String> {
-    let checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
+    let exclude_terms = state.config.lock().bundle_exclude_terms.clone();
+    let mut checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
+    checks.retain(|check| match &check.result {
+        Ok(contents) => {
+            !sources::humble::matches_excluded_bundle(&contents.bundle_name, &exclude_terms)
+        }
+        Err(_) => true,
+    });
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
 
@@ -371,6 +378,7 @@ pub struct ConfigStatus {
     packt_cookies_set: bool,
     manning_cookies_set: bool,
     db_path: String,
+    bundle_exclude_terms: Vec<String>,
 }
 
 #[tauri::command]
@@ -381,6 +389,7 @@ pub fn get_config_status(state: State<AppState>) -> ConfigStatus {
         packt_cookies_set: config.packt_cookies.is_some(),
         manning_cookies_set: config.manning_cookies.is_some(),
         db_path: config.resolve_db_path().display().to_string(),
+        bundle_exclude_terms: config.bundle_exclude_terms.clone(),
     }
 }
 
@@ -394,6 +403,48 @@ pub fn set_credential(state: State<AppState>, field: String, value: String) -> R
         other => return Err(format!("unknown credential field '{other}'")),
     }
     config.save().map_err(err)
+}
+
+/// Adds a term to the bundle-name exclude list (see
+/// `library_core::sources::humble::matches_excluded_bundle`), no-op if
+/// already present (case-insensitive). Returns the full list afterward so
+/// the frontend can just re-render it, instead of round-tripping a second
+/// `get_config_status` call.
+#[tauri::command]
+pub fn add_bundle_exclude_term(state: State<AppState>, term: String) -> Result<Vec<String>, String> {
+    let trimmed = term.trim();
+    if trimmed.is_empty() {
+        return Err("exclude term must not be empty".to_string());
+    }
+    let mut config = state.config.lock();
+    if !config
+        .bundle_exclude_terms
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case(trimmed))
+    {
+        config.bundle_exclude_terms.push(trimmed.to_string());
+        config.save().map_err(err)?;
+    }
+    Ok(config.bundle_exclude_terms.clone())
+}
+
+/// Removes a term from the bundle-name exclude list (case-insensitive
+/// match), no-op if not present. Returns the full list afterward, like
+/// `add_bundle_exclude_term`.
+#[tauri::command]
+pub fn remove_bundle_exclude_term(
+    state: State<AppState>,
+    term: String,
+) -> Result<Vec<String>, String> {
+    let mut config = state.config.lock();
+    let before = config.bundle_exclude_terms.len();
+    config
+        .bundle_exclude_terms
+        .retain(|t| !t.eq_ignore_ascii_case(term.trim()));
+    if config.bundle_exclude_terms.len() != before {
+        config.save().map_err(err)?;
+    }
+    Ok(config.bundle_exclude_terms.clone())
 }
 
 #[derive(Serialize)]

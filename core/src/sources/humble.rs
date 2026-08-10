@@ -241,6 +241,24 @@ pub fn is_fiction_or_comic(title: &str) -> bool {
     })
 }
 
+/// Returns true if `bundle_name` contains any of `terms` (case-insensitive
+/// substring match) -- backs the user-managed exclude list in
+/// `Config::bundle_exclude_terms`, which skips whole bundles from
+/// `check-bundles`/`check_active_bundles` results before they're ever
+/// printed/shown (e.g. a term like "software" to hide recurring non-book
+/// software bundles that also show up in the Books category listing).
+/// Unlike `is_fiction_or_comic`'s fixed heuristic keyword list applied to
+/// individual titles *within* a bundle, these terms are free-form and
+/// user-supplied, and match against the whole bundle's own name -- so this
+/// is a plain substring check, not a word-boundary heuristic. Blank terms
+/// (e.g. from a stray empty string) never match anything.
+pub fn matches_excluded_bundle(bundle_name: &str, terms: &[String]) -> bool {
+    let lower = bundle_name.to_lowercase();
+    terms
+        .iter()
+        .any(|term| !term.trim().is_empty() && lower.contains(&term.to_lowercase()))
+}
+
 #[derive(Debug, Deserialize)]
 struct BundlePageData {
     #[serde(rename = "bundleData")]
@@ -738,5 +756,25 @@ mod tests {
         assert!(!is_fiction_or_comic("Programming Rust"));
         assert!(!is_fiction_or_comic("Rust in Action"));
         assert!(!is_fiction_or_comic("Kubernetes Patterns"));
+    }
+
+    #[test]
+    fn matches_excluded_bundle_finds_case_insensitive_substring() {
+        let terms = vec!["software".to_string(), "board game".to_string()];
+        assert!(matches_excluded_bundle("Humble Software Bundle", &terms));
+        assert!(matches_excluded_bundle(
+            "The Humble Board Game Design Bundle",
+            &terms
+        ));
+        assert!(!matches_excluded_bundle("Humble Tech Book Bundle: Rust", &terms));
+    }
+
+    #[test]
+    fn matches_excluded_bundle_ignores_blank_terms_and_empty_list() {
+        assert!(!matches_excluded_bundle("Any Bundle Name", &[]));
+        assert!(!matches_excluded_bundle(
+            "Any Bundle Name",
+            &["   ".to_string(), "".to_string()]
+        ));
     }
 }

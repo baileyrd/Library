@@ -519,7 +519,46 @@ async function loadSettings() {
   setPill("status-packt", status.packt_cookies_set);
   setPill("status-manning", status.manning_cookies_set);
   document.getElementById("db-path").textContent = status.db_path;
+  renderBundleExcludeTerms(status.bundle_exclude_terms);
 }
+
+function renderBundleExcludeTerms(terms) {
+  const container = document.getElementById("bundle-exclude-terms");
+  if (!terms.length) {
+    container.innerHTML = `<p class="hint">No exclude terms yet \u2014 every current bundle will be checked.</p>`;
+    return;
+  }
+  container.innerHTML = terms
+    .map(
+      (term) =>
+        `<span class="term-chip">${escapeHtml(term)}<button type="button" class="remove-term-btn" data-term="${escapeHtml(term)}" title="Remove">&times;</button></span>`
+    )
+    .join("");
+  container.querySelectorAll(".remove-term-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const remaining = await invoke("remove_bundle_exclude_term", { term: btn.dataset.term });
+      renderBundleExcludeTerms(remaining);
+    });
+  });
+}
+
+async function addBundleExcludeTerm() {
+  const input = document.getElementById("bundle-exclude-input");
+  const term = input.value.trim();
+  if (!term) return;
+  try {
+    const terms = await invoke("add_bundle_exclude_term", { term });
+    input.value = "";
+    renderBundleExcludeTerms(terms);
+  } catch (e) {
+    alert(String(e));
+  }
+}
+
+document.getElementById("bundle-exclude-add-btn").addEventListener("click", addBundleExcludeTerm);
+document.getElementById("bundle-exclude-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addBundleExcludeTerm();
+});
 
 function setPill(id, isSet) {
   const el = document.getElementById(id);

@@ -145,6 +145,11 @@ library check-bundle https://www.humblebundle.com/books/some-bundle --exclude-fi
 library check-bundles   # discover and check every bundle on humblebundle.com/books right now
 library check-bundles --exclude-fiction   # same, skipping titles that look like fiction/comics
 
+# Skip whole bundles by name in check-bundles (persisted in config, case-insensitive substring match)
+library config bundle-exclude-add "software"
+library config bundle-exclude-list
+library config bundle-exclude-remove "software"
+
 # See counts per source
 library stats
 
@@ -174,7 +179,11 @@ invocation; `-v` / `--verbose` prints extra diagnostics to stderr.
   bundle pages expose no genre/category field either, so `check-bundle`/
   `check-bundles --exclude-fiction` filters on a title-keyword heuristic
   (`sources::humble::is_fiction_or_comic`) rather than real genre data —
-  best-effort, not exact.
+  best-effort, not exact. `check-bundles` also skips whole bundles whose
+  name matches a term in `config bundle-exclude-add`
+  (`sources::humble::matches_excluded_bundle`) -- a plain case-insensitive
+  substring match against `Config.bundle_exclude_terms`, since the listing
+  page itself exposes no category beyond "bundle" to filter on.
 - **Packt**: entitlements API shape is based on historical-but-corroborated
   third-party research; the exact response shape may have drifted since.
   Formats are not fetched per-book (would require an extra API round-trip

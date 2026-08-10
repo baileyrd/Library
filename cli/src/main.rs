@@ -48,7 +48,9 @@ fn run() -> Result<()> {
         Command::CheckBundle { url, exclude_fiction } => {
             handle_check_bundle(&db, &url, exclude_fiction)
         }
-        Command::CheckBundles { exclude_fiction } => handle_check_bundles(&db, exclude_fiction),
+        Command::CheckBundles { exclude_fiction } => {
+            handle_check_bundles(&db, &config, exclude_fiction)
+        }
         Command::Stats => handle_stats(&db),
         Command::Enrich => handle_enrich(&db),
         Command::Config { action } => handle_config(action),
@@ -317,11 +319,27 @@ fn handle_check_bundle(db: &Db, url: &str, exclude_fiction: bool) -> Result<()> 
     Ok(())
 }
 
-fn handle_check_bundles(db: &Db, exclude_fiction: bool) -> Result<()> {
+fn handle_check_bundles(db: &Db, config: &Config, exclude_fiction: bool) -> Result<()> {
     let mut checks = sources::humble::fetch_all_active_bundles()?;
+    let discovered = checks.len();
+    checks.retain(|check| match &check.result {
+        Ok(contents) => !sources::humble::matches_excluded_bundle(
+            &contents.bundle_name,
+            &config.bundle_exclude_terms,
+        ),
+        Err(_) => true,
+    });
+    let excluded = discovered - checks.len();
     let existing = db.all_books().context("failed to load existing books")?;
 
-    println!("{} bundles currently on humblebundle.com/books", checks.len());
+    if excluded > 0 {
+        println!(
+            "{} bundles currently on humblebundle.com/books ({excluded} excluded by your bundle-exclude terms)",
+            checks.len()
+        );
+    } else {
+        println!("{} bundles currently on humblebundle.com/books", checks.len());
+    }
     for check in &mut checks {
         match &mut check.result {
             Ok(contents) => {
@@ -414,12 +432,23 @@ fn handle_enrich(db: &Db) -> Result<()> {
 }
 
 fn handle_config(action: ConfigAction) -> Result<()> {
-    let ConfigAction::Set {
-        humble_cookie,
-        packt_cookies,
-        manning_cookies,
-    } = action;
+    match action {
+        ConfigAction::Set {
+            humble_cookie,
+            packt_cookies,
+            manning_cookies,
+        } => handle_config_set(humble_cookie, packt_cookies, manning_cookies),
+        ConfigAction::BundleExcludeAdd { term } => handle_bundle_exclude_add(term),
+        ConfigAction::BundleExcludeRemove { term } => handle_bundle_exclude_remove(term),
+        ConfigAction::BundleExcludeList => handle_bundle_exclude_list(),
+    }
+}
 
+fn handle_config_set(
+    humble_cookie: Option<String>,
+    packt_cookies: Option<String>,
+    manning_cookies: Option<String>,
+) -> Result<()> {
     if humble_cookie.is_none() && packt_cookies.is_none() && manning_cookies.is_none() {
         bail!("nothing to set: pass at least one of --humble-cookie, --packt-cookies, --manning-cookies");
     }
@@ -445,6 +474,61 @@ fn handle_config(action: ConfigAction) -> Result<()> {
         "updated: {} (file permissions set to 0600)",
         changed.join(", ")
     );
+    Ok(())
+}
+
+fn handle_bundle_exclude_add(term: String) -> Result<()> {
+    let trimmed = term.trim();
+    if trimmed.is_empty() {
+        bail!("exclude term must not be empty");
+    }
+
+    let mut config = Config::load()?;
+    if config
+        .bundle_exclude_terms
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case(trimmed))
+    {
+        println!("'{trimmed}' is already in the bundle exclude list");
+        return Ok(());
+    }
+    config.bundle_exclude_terms.push(trimmed.to_string());
+    config.save()?;
+    println!(
+        "added '{trimmed}' to the bundle exclude list ({} total)",
+        config.bundle_exclude_terms.len()
+    );
+    Ok(())
+}
+
+fn handle_bundle_exclude_remove(term: String) -> Result<()> {
+    let mut config = Config::load()?;
+    let before = config.bundle_exclude_terms.len();
+    config
+        .bundle_exclude_terms
+        .retain(|t| !t.eq_ignore_ascii_case(term.trim()));
+
+    if config.bundle_exclude_terms.len() == before {
+        println!("'{term}' was not in the bundle exclude list");
+        return Ok(());
+    }
+    config.save()?;
+    println!(
+        "removed '{term}' from the bundle exclude list ({} remaining)",
+        config.bundle_exclude_terms.len()
+    );
+    Ok(())
+}
+
+fn handle_bundle_exclude_list() -> Result<()> {
+    let config = Config::load()?;
+    if config.bundle_exclude_terms.is_empty() {
+        println!("no bundle exclude terms configured");
+    } else {
+        for term in &config.bundle_exclude_terms {
+            println!("{term}");
+        }
+    }
     Ok(())
 }
 

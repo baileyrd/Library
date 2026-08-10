@@ -256,6 +256,29 @@ button.primary:hover { background: var(--accent-hover); }
 
 .db-path { margin-top: 1.5rem; }
 
+.term-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+
+.term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.4rem 0.25rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.term-chip button {
+  padding: 0 0.35rem;
+  border: none;
+  border-radius: 999px;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.term-chip button:hover { background: #fbeae8; color: var(--danger); }
+
 .modal {
   position: fixed;
   inset: 0;

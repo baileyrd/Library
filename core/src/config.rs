@@ -9,6 +9,15 @@ pub struct Config {
     pub packt_cookies: Option<String>,
     pub manning_cookies: Option<String>,
     pub db_path: Option<PathBuf>,
+    /// Case-insensitive substring terms; a bundle whose name contains any of
+    /// them is skipped from `check-bundles`/`check_active_bundles` results
+    /// entirely (e.g. "software" to hide recurring non-book software
+    /// bundles that also show up in the Books category listing). Empty by
+    /// default -- nothing is filtered until the user adds a term. `#[serde(
+    /// default)]` so existing `config.toml` files written before this field
+    /// existed still parse.
+    #[serde(default)]
+    pub bundle_exclude_terms: Vec<String>,
 }
 
 impl Config {
@@ -86,6 +95,7 @@ mod tests {
             packt_cookies: Some("packt_session=abc; XSRF-TOKEN=def".to_string()),
             manning_cookies: None,
             db_path: Some(PathBuf::from("/tmp/library.db")),
+            bundle_exclude_terms: vec!["software".to_string(), "game".to_string()],
         };
 
         config.save_to(&config_path).unwrap();
@@ -95,6 +105,7 @@ mod tests {
         assert_eq!(parsed.packt_cookies, config.packt_cookies);
         assert_eq!(parsed.manning_cookies, config.manning_cookies);
         assert_eq!(parsed.db_path, config.db_path);
+        assert_eq!(parsed.bundle_exclude_terms, config.bundle_exclude_terms);
     }
 
     #[test]
@@ -147,5 +158,6 @@ mod tests {
         assert!(config.humble_cookie.is_none());
         assert!(config.packt_cookies.is_none());
         assert!(config.manning_cookies.is_none());
+        assert!(config.bundle_exclude_terms.is_empty());
     }
 }

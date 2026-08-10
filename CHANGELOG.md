@@ -60,6 +60,17 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
   duplicates (same signal as the list view's compact badge, with full
   match detail), and a collapsed raw-source-data panel. Edit/Remove stay
   one click away instead of being folded into it.
+- Bundle-name exclude terms (`Config.bundle_exclude_terms`): `check-bundles`
+  (CLI) and "Check against current bundles" (desktop) now skip whole
+  bundles whose name contains a user-added term (case-insensitive
+  substring match, `sources::humble::matches_excluded_bundle`), instead of
+  always screening every bundle Humble currently lists under Books --
+  handy for recurring non-book bundles that show up there too. Manage the
+  list via `library config bundle-exclude-add/-remove/-list` on the CLI, or
+  the new "Bundle exclude terms" box in the desktop Settings tab
+  (`add_bundle_exclude_term`/`remove_bundle_exclude_term` commands). A
+  single explicitly-pasted `check-bundle <url>` is unaffected -- the filter
+  only applies to the bulk discovery command.
 ### Changed
 - Packt import now targets `subscription.packtpub.com/api/entitlements`
   with `packt_session`/`XSRF-TOKEN` cookie auth, replacing the old

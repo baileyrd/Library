@@ -27,6 +27,8 @@ pub fn run() {
             commands::stats,
             commands::get_config_status,
             commands::set_credential,
+            commands::add_bundle_exclude_term,
+            commands::remove_bundle_exclude_term,
             commands::import_source,
             commands::capture_credential,
             commands::enrich_metadata,

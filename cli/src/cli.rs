@@ -77,6 +77,7 @@ pub enum Command {
     },
 
     /// Discover every bundle currently on humblebundle.com/books and check all of them.
+    /// Bundles matching a `config bundle-exclude-add` term are skipped entirely.
     CheckBundles {
         /// Skip books that look like fiction or a comic/graphic novel (best-effort
         /// title match -- Humble Bundle exposes no genre data to check against).
@@ -140,4 +141,23 @@ pub enum ConfigAction {
         #[arg(long = "manning-cookies")]
         manning_cookies: Option<String>,
     },
+
+    /// Add a term to the Humble Bundle bundle-name exclude list. Any bundle
+    /// whose name contains the term (case-insensitive) is skipped entirely
+    /// from `check-bundles` output -- e.g. add "software" to stop seeing
+    /// recurring non-book software bundles that also show up in the Books
+    /// category listing.
+    BundleExcludeAdd {
+        /// Case-insensitive substring to match against each bundle's name.
+        term: String,
+    },
+
+    /// Remove a term from the bundle-name exclude list.
+    BundleExcludeRemove {
+        /// Term to remove, matched case-insensitively.
+        term: String,
+    },
+
+    /// List the current bundle-name exclude terms.
+    BundleExcludeList,
 }

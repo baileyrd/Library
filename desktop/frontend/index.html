@@ -138,6 +138,17 @@
         <button id="save-settings-btn" class="primary">Save pasted values</button>
         <p id="settings-status" class="hint"></p>
         <p class="hint db-path">Database: <code id="db-path"></code></p>
+        <h2>Bundle exclude terms</h2>
+        <p class="hint">
+          Bundles whose name contains any of these terms (case-insensitive) are skipped
+          entirely from "Check against current bundles" -- e.g. add "software" to stop
+          seeing recurring non-book software bundles.
+        </p>
+        <div class="toolbar">
+          <input id="bundle-exclude-input" type="text" placeholder="e.g. software" />
+          <button id="bundle-exclude-add-btn">Add term</button>
+        </div>
+        <div id="bundle-exclude-terms" class="term-list"></div>
       </section>
 
       <section id="view-book" class="view">

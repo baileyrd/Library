@@ -65,6 +65,11 @@ cargo tauri build     # produces an installer/bundle under target/release/bundle
   cookie jar) still works as a fallback. Either way it's the same config
   file the CLI reads (`~/.config/library-inventory/config.toml`, `0600`
   permissions). See the root README for the manual/devtools instructions.
+  Also has a "Bundle exclude terms" list -- add a term (e.g. "software") to
+  have "Check against current bundles" skip every bundle whose name
+  contains it (case-insensitive substring match), instead of scrolling past
+  recurring non-book bundles that also show up in Humble's Books category
+  listing (`library config bundle-exclude-add` on the CLI).
 
 ## Notes
 
