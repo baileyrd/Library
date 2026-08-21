@@ -248,7 +248,11 @@ pub struct BundleCheckResult {
 
 /// Scores every book in `contents` against `existing` with the same
 /// title/ISBN dedup logic `check_duplicates` uses for a single query.
-fn score_bundle(existing: &[Book], url: String, contents: sources::humble::BundleContents) -> BundleCheckResult {
+fn score_bundle(
+    existing: &[Book],
+    url: String,
+    contents: sources::humble::BundleContents,
+) -> BundleCheckResult {
     let items = contents
         .items
         .into_iter()
@@ -411,7 +415,10 @@ pub fn set_credential(state: State<AppState>, field: String, value: String) -> R
 /// the frontend can just re-render it, instead of round-tripping a second
 /// `get_config_status` call.
 #[tauri::command]
-pub fn add_bundle_exclude_term(state: State<AppState>, term: String) -> Result<Vec<String>, String> {
+pub fn add_bundle_exclude_term(
+    state: State<AppState>,
+    term: String,
+) -> Result<Vec<String>, String> {
     let trimmed = term.trim();
     if trimmed.is_empty() {
         return Err("exclude term must not be empty".to_string());
@@ -561,7 +568,7 @@ pub async fn capture_credential(
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(login_url))
             .title(format!("Library \u{2014} sign in to {}", spec.label))
             .inner_size(480.0, 760.0)
-            .initialization_script(&capture::injected_script(spec))
+            .initialization_script(capture::injected_script(spec))
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -576,10 +583,8 @@ pub async fn capture_credential(
     let captured = tauri::async_runtime::spawn_blocking(move || -> Option<String> {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
-            if app_for_poll.get_webview_window(&label_for_poll).is_none() {
-                // The user closed the window before finishing login.
-                return None;
-            }
+            // The user closed the window before finishing login.
+            app_for_poll.get_webview_window(&label_for_poll)?;
 
             // `WebviewWindow::cookies_for_url` dispatches to the main thread
             // and blocks on a channel reply; if the window gets torn down in
