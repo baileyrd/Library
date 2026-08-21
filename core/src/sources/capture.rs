@@ -115,11 +115,30 @@ fn manual_ready(cookies: &[CookiePair]) -> bool {
 /// header expects -- exactly what a browser would send, and exactly what
 /// `Manning::fetch_dashboard`, `Packt::fetch`, and the README's manual
 /// instructions expect.
+///
+/// Deduplicates by cookie name, keeping the last-seen value but each
+/// name's first-seen position -- needed because `capture_credential`
+/// polls every one of `spec.cookie_domains` and `extend()`s the results
+/// together with no dedup of its own. Packt's two domains
+/// (`subscription.packtpub.com`, `www.packtpub.com`) both resolve to the
+/// same `Domain=.packtpub.com`-scoped cookies, so without this every real
+/// session cookie would otherwise appear twice, verbatim, in the saved
+/// credential and in every `Cookie` header built from it.
 fn build_cookie_jar(cookies: &[CookiePair]) -> String {
-    cookies
-        .iter()
-        .filter(|(name, _)| name != MANUAL_READY_SIGNAL_COOKIE)
-        .map(|(name, value)| format!("{name}={value}"))
+    let mut order: Vec<&str> = Vec::new();
+    let mut values: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for (name, value) in cookies {
+        if name == MANUAL_READY_SIGNAL_COOKIE {
+            continue;
+        }
+        if !values.contains_key(name.as_str()) {
+            order.push(name.as_str());
+        }
+        values.insert(name.as_str(), value.as_str());
+    }
+    order
+        .into_iter()
+        .map(|name| format!("{name}={}", values[name]))
         .collect::<Vec<_>>()
         .join("; ")
 }
@@ -273,6 +292,32 @@ mod tests {
             pair("b", "2"),
         ];
         assert_eq!(build_cookie_jar(&cookies), "a=1; b=2");
+    }
+
+    #[test]
+    fn build_cookie_jar_dedupes_by_name_keeping_last_value() {
+        // Reproduces `capture_credential` polling two `cookie_domains` that
+        // resolve to the same underlying cookie store (e.g. Packt's
+        // `subscription.packtpub.com` and `www.packtpub.com`, both scoped
+        // under `Domain=.packtpub.com`): `cookies_for_url` returns the same
+        // cookie for both, and the caller `extend()`s the two results
+        // together with no dedup of its own.
+        let cookies = [
+            pair("packt_session", "sess123"),
+            pair("XSRF-TOKEN", "tok456"),
+            pair("packt_session", "sess123"),
+            pair("XSRF-TOKEN", "tok456"),
+        ];
+        assert_eq!(
+            build_cookie_jar(&cookies),
+            "packt_session=sess123; XSRF-TOKEN=tok456"
+        );
+
+        // A later duplicate with a different value (e.g. a cookie that
+        // rotates between polls) wins, but the name keeps its first-seen
+        // position so jar ordering stays stable.
+        let rotated = [pair("a", "1"), pair("b", "2"), pair("a", "3")];
+        assert_eq!(build_cookie_jar(&rotated), "a=3; b=2");
     }
 
     #[test]
