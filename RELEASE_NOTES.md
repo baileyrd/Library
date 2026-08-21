@@ -23,6 +23,24 @@ reverse chronological (no version tags yet — this is pre-1.0 and unpublished).
 
 ---
 
+## PR #6 — Run cargo fmt --all to fix CI-blocking formatting drift
+**2026-08-21** · [#6](https://github.com/baileyrd/Library/pull/6)
+
+- **Fixed:** `main`'s `check` workflow had been failing on `cargo fmt --all --
+  check` since commit 8a7ef99, blocking every PR's `check` job (including
+  doc-only ones) from passing. Ran `cargo fmt --all`; touched
+  `cli/src/main.rs`, `core/src/db.rs`, `core/src/enrich.rs`,
+  `core/src/sources/humble.rs`, and `desktop/src-tauri/src/commands.rs` —
+  all whitespace/line-wrapping, no logic changes. Closes #5.
+- **Fixed:** with `Format` finally passing, `Clippy` ran against current
+  `main` for the first time and surfaced two genuine, pre-existing lints in
+  `desktop/src-tauri/src/commands.rs` that had never actually been checked
+  before (`needless_borrows_for_generic_args` on
+  `.initialization_script(&capture::injected_script(spec))`, and
+  `question_mark` on an `if ... .is_none() { return None; }` block inside a
+  closure already returning `Option<String>`). Fixed both with clippy's own
+  suggested rewrites — no behavior change.
+
 ## PR #4 — Fix documentation drift found in a docs-loop audit pass
 **2026-08-21** · [#4](https://github.com/baileyrd/Library/pull/4)
 
