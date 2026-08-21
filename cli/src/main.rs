@@ -45,9 +45,10 @@ fn run() -> Result<()> {
         } => handle_add(&db, title, author, isbn, format, cover_url),
         Command::List { source, json } => handle_list(&db, source, json),
         Command::Check { query } => handle_check(&db, &query),
-        Command::CheckBundle { url, exclude_fiction } => {
-            handle_check_bundle(&db, &url, exclude_fiction)
-        }
+        Command::CheckBundle {
+            url,
+            exclude_fiction,
+        } => handle_check_bundle(&db, &url, exclude_fiction),
         Command::CheckBundles { exclude_fiction } => {
             handle_check_bundles(&db, &config, exclude_fiction)
         }
@@ -338,7 +339,10 @@ fn handle_check_bundles(db: &Db, config: &Config, exclude_fiction: bool) -> Resu
             checks.len()
         );
     } else {
-        println!("{} bundles currently on humblebundle.com/books", checks.len());
+        println!(
+            "{} bundles currently on humblebundle.com/books",
+            checks.len()
+        );
     }
     for check in &mut checks {
         match &mut check.result {

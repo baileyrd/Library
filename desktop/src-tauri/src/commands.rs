@@ -248,7 +248,11 @@ pub struct BundleCheckResult {
 
 /// Scores every book in `contents` against `existing` with the same
 /// title/ISBN dedup logic `check_duplicates` uses for a single query.
-fn score_bundle(existing: &[Book], url: String, contents: sources::humble::BundleContents) -> BundleCheckResult {
+fn score_bundle(
+    existing: &[Book],
+    url: String,
+    contents: sources::humble::BundleContents,
+) -> BundleCheckResult {
     let items = contents
         .items
         .into_iter()
@@ -411,7 +415,10 @@ pub fn set_credential(state: State<AppState>, field: String, value: String) -> R
 /// the frontend can just re-render it, instead of round-tripping a second
 /// `get_config_status` call.
 #[tauri::command]
-pub fn add_bundle_exclude_term(state: State<AppState>, term: String) -> Result<Vec<String>, String> {
+pub fn add_bundle_exclude_term(
+    state: State<AppState>,
+    term: String,
+) -> Result<Vec<String>, String> {
     let trimmed = term.trim();
     if trimmed.is_empty() {
         return Err("exclude term must not be empty".to_string());
