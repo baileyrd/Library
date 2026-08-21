@@ -23,6 +23,45 @@ reverse chronological (no version tags yet — this is pre-1.0 and unpublished).
 
 ---
 
+## PR #6 — Run cargo fmt --all to fix CI-blocking formatting drift
+**2026-08-21** · [#6](https://github.com/baileyrd/Library/pull/6)
+
+- **Fixed:** `main`'s `check` workflow had been failing on `cargo fmt --all --
+  check` since commit 8a7ef99, blocking every PR's `check` job (including
+  doc-only ones) from passing. Ran `cargo fmt --all`; touched
+  `cli/src/main.rs`, `core/src/db.rs`, `core/src/enrich.rs`,
+  `core/src/sources/humble.rs`, and `desktop/src-tauri/src/commands.rs` —
+  all whitespace/line-wrapping, no logic changes. Closes #5.
+- **Fixed:** with `Format` finally passing, `Clippy` ran against current
+  `main` for the first time and surfaced two genuine, pre-existing lints in
+  `desktop/src-tauri/src/commands.rs` that had never actually been checked
+  before (`needless_borrows_for_generic_args` on
+  `.initialization_script(&capture::injected_script(spec))`, and
+  `question_mark` on an `if ... .is_none() { return None; }` block inside a
+  closure already returning `Option<String>`). Fixed both with clippy's own
+  suggested rewrites — no behavior change.
+
+## PR #4 — Fix documentation drift found in a docs-loop audit pass
+**2026-08-21** · [#4](https://github.com/baileyrd/Library/pull/4)
+
+- **Fixed:** README.md's `check` weak-match description claimed matches down
+  to 0.75 confidence show under "review manually", but `CHECK_WEAK_THRESHOLD`
+  is 0.90 in both the CLI and desktop app (same as the strong cutoff), so
+  that section is currently always empty in practice — the doc now says so
+  and explains why (a lower floor produced only false positives, per this
+  file's own PR #3-adjacent history in CHANGELOG.md).
+- **Fixed:** ARCHITECTURE.md referenced the desktop crate's paths
+  (`src-tauri/src/commands.rs`, `frontend/`) without the `desktop/` prefix,
+  so they didn't resolve from the repo root.
+- **Fixed:** `ci-rust.yml`'s Clippy step comment cited "desktop/src-tauri's
+  mutex-lock unwraps" as an unwrap() example; that crate uses
+  `parking_lot::Mutex` specifically to avoid needing `lock().unwrap()`, so
+  no such calls exist there anymore. The still-true `core/src/dedup.rs`
+  example is kept.
+- **Added:** `docs-audit.md` — the full whole-repo documentation audit this
+  PR is based on, including 9 confirmed-accurate claims and 1 unverifiable
+  claim logged so a future audit doesn't re-litigate them.
+
 ## PR #3 — Apply standard repo governance files and fix CI-blocking issues they surfaced
 **2026-08-08** · [#3](https://github.com/baileyrd/Library/pull/3)
 

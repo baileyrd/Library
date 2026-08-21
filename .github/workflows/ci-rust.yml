@@ -45,9 +45,11 @@ jobs:
       - name: Clippy
         # Warnings fail the build. Note: this repo does not currently forbid
         # unwrap()/expect() in production code (see e.g. core/src/dedup.rs's
-        # Regex::new(...).unwrap() calls and desktop/src-tauri's mutex-lock
-        # unwraps) — "clean" here means no clippy lint warnings, not adherence
-        # to a stricter unwrap-free standard.
+        # Regex::new(...).unwrap() calls) — "clean" here means no clippy lint
+        # warnings, not adherence to a stricter unwrap-free standard.
+        # (desktop/src-tauri deliberately uses parking_lot::Mutex specifically
+        # to avoid needing a lock().unwrap() at every call site — see
+        # desktop/src-tauri/src/state.rs — so it's no longer a good example here.)
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Test

@@ -32,10 +32,11 @@ Three crates in one Cargo workspace:
   business logic; unit-tested independently of any frontend.
 - `cli/` (`library`) — clap-based CLI, no logic of its own beyond argument parsing
   and print formatting.
-- `desktop/` (`library-desktop`) — Tauri app; `src-tauri/src/commands.rs` is a thin
-  `#[tauri::command]` wrapper layer, `frontend/` is static HTML/CSS/JS with no build
-  step (uses Tauri's `withGlobalTauri` bridge instead of an npm-installed API
-  client, to keep the desktop app buildable with `cargo` alone).
+- `desktop/` (`library-desktop`) — Tauri app; `desktop/src-tauri/src/commands.rs`
+  is a thin `#[tauri::command]` wrapper layer, `desktop/frontend/` is static
+  HTML/CSS/JS with no build step (uses Tauri's `withGlobalTauri` bridge instead
+  of an npm-installed API client, to keep the desktop app buildable with
+  `cargo` alone).
 
 Kindle is intentionally the odd one out: Amazon has no official API, and the
 unofficial routes require working around active TLS/anti-bot fingerprinting, which
