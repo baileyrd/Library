@@ -568,7 +568,7 @@ pub async fn capture_credential(
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(login_url))
             .title(format!("Library \u{2014} sign in to {}", spec.label))
             .inner_size(480.0, 760.0)
-            .initialization_script(&capture::injected_script(spec))
+            .initialization_script(capture::injected_script(spec))
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -583,10 +583,8 @@ pub async fn capture_credential(
     let captured = tauri::async_runtime::spawn_blocking(move || -> Option<String> {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
-            if app_for_poll.get_webview_window(&label_for_poll).is_none() {
-                // The user closed the window before finishing login.
-                return None;
-            }
+            // The user closed the window before finishing login.
+            app_for_poll.get_webview_window(&label_for_poll)?;
 
             // `WebviewWindow::cookies_for_url` dispatches to the main thread
             // and blocks on a channel reply; if the window gets torn down in
