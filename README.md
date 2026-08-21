@@ -161,8 +161,12 @@ Every `import` and `add` prints duplicate warnings (confidence >= 0.90 fuzzy
 title match, or ISBN match, or exact-title match) against books already in
 your library from a *different* source — these are warnings only, nothing is
 ever auto-skipped, since you may legitimately want the same book from two
-storefronts (e.g. different formats). `check` additionally shows weaker
-matches down to 0.75 confidence under a separate "review manually" section.
+storefronts (e.g. different formats). `check` additionally partitions matches
+into a separate "review manually" section for weaker candidates — but the
+weak-match floor is also 0.90, the same as the strong-match cutoff, so in
+practice that section is currently always empty. A lower floor (0.75) was
+tried and reverted: every match sampled between 0.75 and 0.90 against a real
+library turned out to be a false positive (see `CHANGELOG.md`).
 
 Global options: `--db <path>` overrides the database location for a single
 invocation; `-v` / `--verbose` prints extra diagnostics to stderr.
