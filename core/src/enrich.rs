@@ -254,8 +254,13 @@ pub fn enrich_missing(db: &Db) -> Result<EnrichSummary> {
             continue;
         };
 
-        let authors = (needs_authors && !found.authors.is_empty()).then_some(found.authors.as_slice());
-        let isbn = if needs_isbn { found.isbn.as_deref() } else { None };
+        let authors =
+            (needs_authors && !found.authors.is_empty()).then_some(found.authors.as_slice());
+        let isbn = if needs_isbn {
+            found.isbn.as_deref()
+        } else {
+            None
+        };
 
         // Prefer a cover looked up directly by ISBN -- more reliable than
         // whichever edition search.json's `cover_i` happened to surface --
@@ -308,7 +313,9 @@ mod tests {
     #[test]
     fn parses_matching_result() {
         let json = r#"{"docs":[{"title":"Programming Rust","author_name":["Jim Blandy","Jason Orendorff"],"isbn":["9781492052548","149205254X"]}]}"#;
-        let found = parse_search_response(json, "Programming Rust").unwrap().unwrap();
+        let found = parse_search_response(json, "Programming Rust")
+            .unwrap()
+            .unwrap();
         assert_eq!(found.authors, vec!["Jim Blandy", "Jason Orendorff"]);
         assert_eq!(found.isbn, Some("9781492052548".to_string()));
     }
@@ -316,7 +323,9 @@ mod tests {
     #[test]
     fn parses_cover_from_search_result() {
         let json = r#"{"docs":[{"title":"Programming Rust","author_name":["Jim Blandy"],"isbn":["9781492052548"],"cover_i":12345}]}"#;
-        let found = parse_search_response(json, "Programming Rust").unwrap().unwrap();
+        let found = parse_search_response(json, "Programming Rust")
+            .unwrap()
+            .unwrap();
         assert_eq!(
             found.cover_url,
             Some("https://covers.openlibrary.org/b/id/12345-L.jpg".to_string())
@@ -326,7 +335,9 @@ mod tests {
     #[test]
     fn missing_cover_i_yields_no_cover_url() {
         let json = r#"{"docs":[{"title":"Programming Rust","author_name":["Jim Blandy"],"isbn":["9781492052548"]}]}"#;
-        let found = parse_search_response(json, "Programming Rust").unwrap().unwrap();
+        let found = parse_search_response(json, "Programming Rust")
+            .unwrap()
+            .unwrap();
         assert_eq!(found.cover_url, None);
     }
 

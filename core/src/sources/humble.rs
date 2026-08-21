@@ -633,7 +633,10 @@ mod tests {
         let contents = parse_bundle_page(BUNDLE_PAGE_FIXTURE).unwrap();
         assert_eq!(contents.bundle_name, "Humble Tech Book Bundle: Rust");
         assert_eq!(contents.items.len(), 2);
-        assert!(contents.items.iter().all(|i| i.title != "Save the Children"));
+        assert!(contents
+            .items
+            .iter()
+            .all(|i| i.title != "Save the Children"));
     }
 
     #[test]
@@ -718,8 +721,7 @@ mod tests {
         assert_eq!(
             urls,
             vec![
-                "https://www.humblebundle.com/books/software-architecture-apress-books"
-                    .to_string(),
+                "https://www.humblebundle.com/books/software-architecture-apress-books".to_string(),
                 "https://www.humblebundle.com/books/tech-career-library-in-age-ai-apress-books"
                     .to_string(),
             ]
@@ -743,7 +745,9 @@ mod tests {
         assert!(is_fiction_or_comic("Batman: The Long Halloween (Comics)"));
         assert!(is_fiction_or_comic("Saga, Vol. 1 (Graphic Novel)"));
         assert!(is_fiction_or_comic("Neuromancer: A Novel"));
-        assert!(is_fiction_or_comic("The Fantasy & Science Fiction Megapack"));
+        assert!(is_fiction_or_comic(
+            "The Fantasy & Science Fiction Megapack"
+        ));
         assert!(is_fiction_or_comic("Attack on Titan Manga Collection"));
         assert!(is_fiction_or_comic("Best Sci-Fi Short Story Collection"));
     }
@@ -766,7 +770,10 @@ mod tests {
             "The Humble Board Game Design Bundle",
             &terms
         ));
-        assert!(!matches_excluded_bundle("Humble Tech Book Bundle: Rust", &terms));
+        assert!(!matches_excluded_bundle(
+            "Humble Tech Book Bundle: Rust",
+            &terms
+        ));
     }
 
     #[test]

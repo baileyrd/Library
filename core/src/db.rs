@@ -233,14 +233,16 @@ impl Db {
         let mut affected = 0;
         if let Some(authors) = authors {
             let joined = authors.join(", ");
-            affected += self
-                .conn
-                .execute("UPDATE books SET authors = ?1 WHERE id = ?2", params![joined, id])?;
+            affected += self.conn.execute(
+                "UPDATE books SET authors = ?1 WHERE id = ?2",
+                params![joined, id],
+            )?;
         }
         if let Some(isbn) = isbn {
-            affected += self
-                .conn
-                .execute("UPDATE books SET isbn = ?1 WHERE id = ?2", params![isbn, id])?;
+            affected += self.conn.execute(
+                "UPDATE books SET isbn = ?1 WHERE id = ?2",
+                params![isbn, id],
+            )?;
         }
         if let Some(cover_url) = cover_url {
             affected += self.conn.execute(
