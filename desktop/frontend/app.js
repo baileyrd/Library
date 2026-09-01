@@ -391,6 +391,7 @@ document.getElementById("bundle-url").addEventListener("keydown", (e) => {
 });
 document.getElementById("active-bundles-check-btn").addEventListener("click", runActiveBundlesCheck);
 let lastBundleCheck = null; // { type: "single", result } | { type: "active", results } | null
+let bundleExcludeTerms = [];
 
 function excludeFictionChecked() {
   return document.getElementById("exclude-fiction").checked;
@@ -403,6 +404,17 @@ function excludeFictionChecked() {
 // bundle over the network again.
 function visibleItems(result, excludeFiction) {
   return excludeFiction ? result.items.filter((item) => !item.is_fiction_or_comic) : result.items;
+}
+
+// Mirrors `library_core::sources::humble::matches_excluded_bundle` --
+// case-insensitive substring match of any configured term against the
+// bundle's own name. Applied here (against the cached fetch) rather than
+// server-side so adding/removing a term in Settings re-filters
+// "Check against current bundles" results immediately instead of
+// requiring a full re-fetch of every bundle.
+function matchesExcludedBundle(bundleName, terms) {
+  const lower = bundleName.toLowerCase();
+  return terms.some((term) => term.trim() !== "" && lower.includes(term.trim().toLowerCase()));
 }
 
 async function runBundleCheck() {
@@ -456,14 +468,18 @@ function renderBundleCheckResults() {
   if (lastBundleCheck.type === "single") {
     results.innerHTML = bundleResultBlock(lastBundleCheck.result, excludeFiction);
   } else {
-    const bundleResults = lastBundleCheck.results;
+    const bundleResults = lastBundleCheck.results.filter(
+      (r) => r.error || !matchesExcludedBundle(r.bundle_name, bundleExcludeTerms)
+    );
+    const excludedCount = lastBundleCheck.results.length - bundleResults.length;
     const okResults = bundleResults.filter((r) => !r.error);
     const ownedCount = okResults.reduce(
       (sum, r) =>
         sum + visibleItems(r, excludeFiction).filter((item) => item.strong.length > 0).length,
       0
     );
-    let html = `<p class="hint">${bundleResults.length} bundles checked (${okResults.length} succeeded) \u2014 ${ownedCount} books across them look like ones you already own.</p>`;
+    const excludedNote = excludedCount ? `, ${excludedCount} excluded by your bundle-exclude terms` : "";
+    let html = `<p class="hint">${bundleResults.length} bundles checked (${okResults.length} succeeded${excludedNote}) \u2014 ${ownedCount} books across them look like ones you already own.</p>`;
     html += bundleResults.map((r) => bundleResultBlock(r, excludeFiction)).join("");
     results.innerHTML = html;
   }
@@ -566,23 +582,27 @@ async function loadSettings() {
 }
 
 function renderBundleExcludeTerms(terms) {
+  bundleExcludeTerms = terms;
   const container = document.getElementById("bundle-exclude-terms");
   if (!terms.length) {
     container.innerHTML = `<p class="hint">No exclude terms yet \u2014 every current bundle will be checked.</p>`;
-    return;
-  }
-  container.innerHTML = terms
-    .map(
-      (term) =>
-        `<span class="term-chip">${escapeHtml(term)}<button type="button" class="remove-term-btn" data-term="${escapeHtml(term)}" title="Remove">&times;</button></span>`
-    )
-    .join("");
-  container.querySelectorAll(".remove-term-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const remaining = await invoke("remove_bundle_exclude_term", { term: btn.dataset.term });
-      renderBundleExcludeTerms(remaining);
+  } else {
+    container.innerHTML = terms
+      .map(
+        (term) =>
+          `<span class="term-chip">${escapeHtml(term)}<button type="button" class="remove-term-btn" data-term="${escapeHtml(term)}" title="Remove">&times;</button></span>`
+      )
+      .join("");
+    container.querySelectorAll(".remove-term-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const remaining = await invoke("remove_bundle_exclude_term", { term: btn.dataset.term });
+        renderBundleExcludeTerms(remaining);
+      });
     });
-  });
+  }
+  // Re-filter any already-fetched "Check against current bundles" results
+  // against the updated term list instead of requiring a re-fetch.
+  renderBundleCheckResults();
 }
 
 async function addBundleExcludeTerm() {
@@ -656,3 +676,8 @@ document.querySelectorAll(".capture-btn").forEach((btn) => {
 // --- Init ---
 
 loadBooks();
+// Loaded eagerly (not just on first Settings-tab visit) so
+// `bundleExcludeTerms` is populated before the first "Check against
+// current bundles" run, in case the user configured terms in a prior
+// session and goes straight to the Check tab.
+loadSettings();

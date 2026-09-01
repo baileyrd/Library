@@ -138,6 +138,14 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
   `is_fiction_or_comic` heuristic is now computed once and shipped with
   the (unfiltered) result, and the frontend caches the last raw response
   to re-filter locally on checkbox change.
+- Desktop app: adding/removing a `config bundle-exclude-add`-style term in
+  Settings now also re-filters an already-fetched "Check against current
+  bundles" result set immediately, same as the fiction/comics checkbox
+  above -- `check_active_bundles` used to apply `bundle_exclude_terms`
+  itself before returning, so a newly added term only took effect on the
+  next full re-fetch of every bundle. It now returns every discovered
+  bundle and the frontend filters by bundle name against the current term
+  list client-side.
 ### Security
 
 <!-- ## [0.1.0] - YYYY-MM-DD

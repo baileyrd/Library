@@ -321,8 +321,12 @@ pub fn check_bundle_url(
 /// checks all of them at once -- the one-click version of
 /// `check_bundle_url` for "is anything on sale right now something I
 /// already own?" instead of finding and pasting each bundle's URL by hand.
-/// Same as `check_bundle_url`, "exclude fiction/comics" is applied
-/// client-side, so it's not a parameter here either.
+/// Returns every discovered bundle, including ones matching a
+/// `config bundle-exclude-add` term -- like "exclude fiction/comics" (see
+/// `check_bundle_url`), whole-bundle exclusion is applied client-side
+/// against `BundleCheckResult::bundle_name` too, so adding/removing a term
+/// in Settings re-filters the last fetched result set immediately instead
+/// of requiring a full re-fetch of every bundle to take effect.
 /// One bundle's fetch/parse failure is reported inline via that bundle's
 /// `error` field rather than failing the whole batch (see
 /// `sources::humble::fetch_all_active_bundles`); only a failure to list
@@ -331,14 +335,7 @@ pub fn check_bundle_url(
 pub fn check_active_bundles(
     state: State<AppState>,
 ) -> Result<Vec<BundleCheckResult>, String> {
-    let exclude_terms = state.config.lock().bundle_exclude_terms.clone();
-    let mut checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
-    checks.retain(|check| match &check.result {
-        Ok(contents) => {
-            !sources::humble::matches_excluded_bundle(&contents.bundle_name, &exclude_terms)
-        }
-        Err(_) => true,
-    });
+    let checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
 
