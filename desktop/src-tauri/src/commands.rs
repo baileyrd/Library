@@ -231,12 +231,6 @@ pub struct BundleCheckItem {
     authors: Vec<String>,
     strong: Vec<DedupMatch>,
     weak: Vec<DedupMatch>,
-    /// Best-effort title-keyword heuristic (see
-    /// `sources::humble::is_fiction_or_comic`), computed once per item so
-    /// the frontend can toggle "exclude fiction/comics" against an
-    /// already-fetched result set without re-invoking this command --
-    /// re-running it means re-fetching every bundle over the network.
-    is_fiction_or_comic: bool,
 }
 
 #[derive(Serialize)]
@@ -244,6 +238,18 @@ pub struct BundleCheckResult {
     url: String,
     bundle_name: String,
     items: Vec<BundleCheckItem>,
+    /// Best-effort title-keyword heuristic (see
+    /// `sources::humble::is_fiction_or_comic`) applied to the bundle's own
+    /// name, e.g. "Humble Comics Bundle: ..." -- computed once so the
+    /// frontend can toggle "exclude fiction/comics" against an
+    /// already-fetched result set without re-invoking this command (which
+    /// would mean re-fetching every bundle over the network). This
+    /// screens out whole fiction/comic bundles, not individual book
+    /// titles within an otherwise-kept bundle -- Humble's own bundle
+    /// names are a much more reliable "is this bundle fiction/comics"
+    /// signal than guessing from each book's title (e.g. "Donald Duck and
+    /// Uncle Scrooge" reads as non-fiction by keyword alone).
+    is_fiction_or_comic: bool,
     /// Set when this specific bundle's fetch/parse failed -- `items` is
     /// empty in that case. Only meaningful from `check_active_bundles`,
     /// which tolerates one bad bundle without failing the whole batch;
@@ -280,7 +286,6 @@ fn score_bundle(
             let (strong, weak): (Vec<_>, Vec<_>) =
                 matches.into_iter().partition(|m| m.confidence >= 0.90);
             BundleCheckItem {
-                is_fiction_or_comic: sources::humble::is_fiction_or_comic(&item.title),
                 title: item.title,
                 authors: item.authors,
                 strong,
@@ -291,6 +296,7 @@ fn score_bundle(
 
     BundleCheckResult {
         url,
+        is_fiction_or_comic: sources::humble::is_fiction_or_comic(&contents.bundle_name),
         bundle_name: contents.bundle_name,
         items,
         error: None,
@@ -303,9 +309,10 @@ fn score_bundle(
 /// one at a time. Needs no Humble session -- bundle contents are a public
 /// page, unlike `import_source`'s owned-order fetch.
 ///
-/// Returns every item unfiltered; "exclude fiction/comics" is applied
-/// client-side against `BundleCheckItem::is_fiction_or_comic` instead of
-/// here, so toggling it doesn't force a re-fetch (see `BundleCheckItem`).
+/// `check_bundle_url` never filters -- "exclude fiction/comics" and
+/// bundle-exclude terms both operate on a whole bundle (its
+/// `bundle_name`/`is_fiction_or_comic`), which is meaningless to drop for
+/// a single bundle the user explicitly asked to check by URL.
 #[tauri::command]
 pub fn check_bundle_url(
     state: State<AppState>,
@@ -321,12 +328,12 @@ pub fn check_bundle_url(
 /// checks all of them at once -- the one-click version of
 /// `check_bundle_url` for "is anything on sale right now something I
 /// already own?" instead of finding and pasting each bundle's URL by hand.
-/// Returns every discovered bundle, including ones matching a
-/// `config bundle-exclude-add` term -- like "exclude fiction/comics" (see
-/// `check_bundle_url`), whole-bundle exclusion is applied client-side
-/// against `BundleCheckResult::bundle_name` too, so adding/removing a term
-/// in Settings re-filters the last fetched result set immediately instead
-/// of requiring a full re-fetch of every bundle to take effect.
+/// Returns every discovered bundle unfiltered, including ones matching a
+/// `config bundle-exclude-add` term or flagged by `is_fiction_or_comic` --
+/// both exclusions are applied client-side against `BundleCheckResult`
+/// instead, so adding/removing a term in Settings, or toggling "exclude
+/// fiction/comics", re-filters the last fetched result set immediately
+/// instead of requiring a full re-fetch of every bundle to take effect.
 /// One bundle's fetch/parse failure is reported inline via that bundle's
 /// `error` field rather than failing the whole batch (see
 /// `sources::humble::fetch_all_active_bundles`); only a failure to list
@@ -347,6 +354,7 @@ pub fn check_active_bundles(
                 url: check.url,
                 bundle_name: String::new(),
                 items: Vec::new(),
+                is_fiction_or_comic: false,
                 error: Some(err(e)),
             },
         })

@@ -397,15 +397,6 @@ function excludeFictionChecked() {
   return document.getElementById("exclude-fiction").checked;
 }
 
-// Fiction/comic status is decided once server-side per item
-// (`BundleCheckItem.is_fiction_or_comic`) and shipped with every fetch;
-// toggling the checkbox just re-filters the cached result set below
-// instead of re-invoking the Tauri command, which would re-fetch every
-// bundle over the network again.
-function visibleItems(result, excludeFiction) {
-  return excludeFiction ? result.items.filter((item) => !item.is_fiction_or_comic) : result.items;
-}
-
 // Mirrors `library_core::sources::humble::matches_excluded_bundle` --
 // case-insensitive substring match of any configured term against the
 // bundle's own name. Applied here (against the cached fetch) rather than
@@ -415,6 +406,18 @@ function visibleItems(result, excludeFiction) {
 function matchesExcludedBundle(bundleName, terms) {
   const lower = bundleName.toLowerCase();
   return terms.some((term) => term.trim() !== "" && lower.includes(term.trim().toLowerCase()));
+}
+
+// Whole-bundle exclusion only -- individual book titles within a kept
+// bundle are never filtered out, just like `matchesExcludedBundle`.
+// `is_fiction_or_comic` is decided once server-side from the bundle's own
+// name (`BundleCheckResult.is_fiction_or_comic`) and shipped with every
+// fetch, so toggling the checkbox re-filters the cached result set below
+// instead of re-invoking the Tauri command and re-fetching every bundle.
+function isBundleExcluded(result, excludeFiction) {
+  if (result.error) return false;
+  if (matchesExcludedBundle(result.bundle_name, bundleExcludeTerms)) return true;
+  return excludeFiction && result.is_fiction_or_comic;
 }
 
 async function runBundleCheck() {
@@ -464,23 +467,24 @@ async function runActiveBundlesCheck() {
 function renderBundleCheckResults() {
   const results = document.getElementById("bundle-check-results");
   if (!lastBundleCheck) return;
-  const excludeFiction = excludeFictionChecked();
   if (lastBundleCheck.type === "single") {
-    results.innerHTML = bundleResultBlock(lastBundleCheck.result, excludeFiction);
+    results.innerHTML = bundleResultBlock(lastBundleCheck.result);
   } else {
+    const excludeFiction = excludeFictionChecked();
     const bundleResults = lastBundleCheck.results.filter(
-      (r) => r.error || !matchesExcludedBundle(r.bundle_name, bundleExcludeTerms)
+      (r) => !isBundleExcluded(r, excludeFiction)
     );
     const excludedCount = lastBundleCheck.results.length - bundleResults.length;
     const okResults = bundleResults.filter((r) => !r.error);
     const ownedCount = okResults.reduce(
-      (sum, r) =>
-        sum + visibleItems(r, excludeFiction).filter((item) => item.strong.length > 0).length,
+      (sum, r) => sum + r.items.filter((item) => item.strong.length > 0).length,
       0
     );
-    const excludedNote = excludedCount ? `, ${excludedCount} excluded by your bundle-exclude terms` : "";
+    const excludedNote = excludedCount
+      ? `, ${excludedCount} excluded by your bundle-exclude terms/fiction filter`
+      : "";
     let html = `<p class="hint">${bundleResults.length} bundles checked (${okResults.length} succeeded${excludedNote}) \u2014 ${ownedCount} books across them look like ones you already own.</p>`;
-    html += bundleResults.map((r) => bundleResultBlock(r, excludeFiction)).join("");
+    html += bundleResults.map(bundleResultBlock).join("");
     results.innerHTML = html;
   }
   wireBundleCheckLinks();
@@ -488,14 +492,14 @@ function renderBundleCheckResults() {
 
 document.getElementById("exclude-fiction").addEventListener("change", renderBundleCheckResults);
 
-function bundleResultBlock(result, excludeFiction) {
+function bundleResultBlock(result) {
   const name = escapeHtml(result.error ? result.url : result.bundle_name);
   const openBtn = `<button type="button" class="link-btn inline bundle-open-btn" data-url="${escapeHtml(result.url)}" title="Open bundle page" aria-label="Open bundle page">\u2197</button>`;
   const header = `<h3 class="bundle-group-header"><button type="button" class="bundle-toggle-btn" aria-expanded="true"><span class="chevron">\u25be</span> ${name}</button>${openBtn}</h3>`;
   if (result.error) {
     return `<div class="bundle-group">${header}<div class="bundle-group-body"><div class="match-card">Error: ${escapeHtml(result.error)}</div></div></div>`;
   }
-  const items = visibleItems(result, excludeFiction);
+  const items = result.items;
   const ownedCount = items.filter((item) => item.strong.length > 0).length;
   let body = `<p class="hint">${ownedCount} of ${items.length} books look like ones you already own.</p>`;
   body += items.map(bundleItemCard).join("");

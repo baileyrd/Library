@@ -128,24 +128,24 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
   book's own title (and link to its detail page), not just its source and
   confidence -- e.g. "Mastering Bootstrap 4 (Packt, 83% match)" instead of
   an unreadable "Packt, 83% match" repeated for every candidate.
-- Desktop app: toggling "Exclude fiction/comics" on the Humble Bundle
-  checkers now just re-filters the already-fetched results instead of
-  re-running the whole check -- `check_bundle_url`/`check_active_bundles`
-  used to take `exclude_fiction` and apply it before scoring, so changing
-  the checkbox after a check meant refetching every bundle page (and, for
-  "Check against current bundles", every bundle on the site) over the
-  network again just to change what's displayed. Each item's
-  `is_fiction_or_comic` heuristic is now computed once and shipped with
-  the (unfiltered) result, and the frontend caches the last raw response
-  to re-filter locally on checkbox change.
-- Desktop app: adding/removing a `config bundle-exclude-add`-style term in
-  Settings now also re-filters an already-fetched "Check against current
-  bundles" result set immediately, same as the fiction/comics checkbox
-  above -- `check_active_bundles` used to apply `bundle_exclude_terms`
-  itself before returning, so a newly added term only took effect on the
-  next full re-fetch of every bundle. It now returns every discovered
-  bundle and the frontend filters by bundle name against the current term
-  list client-side.
+- Desktop app: "Check against current bundles" filtering ("Exclude
+  fiction/comics" and Settings' `config bundle-exclude-add` terms) now
+  applies to whole bundles only, filtered client-side against an
+  already-fetched result set instead of re-invoking
+  `check_active_bundles` (which re-fetches every bundle over the network)
+  every time a filter changes. Previously "Exclude fiction/comics" also
+  filtered individual book titles within a kept bundle, which missed
+  plenty of real cases -- e.g. "Humble Comics Bundle: Disney Masters
+  Collection and Originals" slipped through uncaught because none of its
+  actual book titles ("Donald Duck and Uncle Scrooge...", "Disney Epic
+  Mickey") contain a fiction/comic keyword, only the bundle's own name
+  does. `BundleCheckResult` now carries a bundle-level
+  `is_fiction_or_comic` (from `sources::humble::is_fiction_or_comic` on
+  the bundle name, computed once server-side) alongside `bundle_name`;
+  the frontend excludes a bundle entirely when either it matches a
+  configured exclude term or (with the checkbox checked) is
+  fiction/comic-flagged, and re-renders on checkbox toggle or
+  term add/remove without a re-fetch.
 ### Security
 
 <!-- ## [0.1.0] - YYYY-MM-DD
