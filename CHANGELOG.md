@@ -128,6 +128,16 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
   book's own title (and link to its detail page), not just its source and
   confidence -- e.g. "Mastering Bootstrap 4 (Packt, 83% match)" instead of
   an unreadable "Packt, 83% match" repeated for every candidate.
+- Desktop app: toggling "Exclude fiction/comics" on the Humble Bundle
+  checkers now just re-filters the already-fetched results instead of
+  re-running the whole check -- `check_bundle_url`/`check_active_bundles`
+  used to take `exclude_fiction` and apply it before scoring, so changing
+  the checkbox after a check meant refetching every bundle page (and, for
+  "Check against current bundles", every bundle on the site) over the
+  network again just to change what's displayed. Each item's
+  `is_fiction_or_comic` heuristic is now computed once and shipped with
+  the (unfiltered) result, and the frontend caches the last raw response
+  to re-filter locally on checkbox change.
 ### Security
 
 <!-- ## [0.1.0] - YYYY-MM-DD

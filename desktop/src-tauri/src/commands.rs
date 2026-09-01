@@ -231,6 +231,12 @@ pub struct BundleCheckItem {
     authors: Vec<String>,
     strong: Vec<DedupMatch>,
     weak: Vec<DedupMatch>,
+    /// Best-effort title-keyword heuristic (see
+    /// `sources::humble::is_fiction_or_comic`), computed once per item so
+    /// the frontend can toggle "exclude fiction/comics" against an
+    /// already-fetched result set without re-invoking this command --
+    /// re-running it means re-fetching every bundle over the network.
+    is_fiction_or_comic: bool,
 }
 
 #[derive(Serialize)]
@@ -274,6 +280,7 @@ fn score_bundle(
             let (strong, weak): (Vec<_>, Vec<_>) =
                 matches.into_iter().partition(|m| m.confidence >= 0.90);
             BundleCheckItem {
+                is_fiction_or_comic: sources::humble::is_fiction_or_comic(&item.title),
                 title: item.title,
                 authors: item.authors,
                 strong,
@@ -295,18 +302,16 @@ fn score_bundle(
 /// these?" before buying instead of pasting titles into `check_duplicates`
 /// one at a time. Needs no Humble session -- bundle contents are a public
 /// page, unlike `import_source`'s owned-order fetch.
+///
+/// Returns every item unfiltered; "exclude fiction/comics" is applied
+/// client-side against `BundleCheckItem::is_fiction_or_comic` instead of
+/// here, so toggling it doesn't force a re-fetch (see `BundleCheckItem`).
 #[tauri::command]
 pub fn check_bundle_url(
     state: State<AppState>,
     url: String,
-    exclude_fiction: bool,
 ) -> Result<BundleCheckResult, String> {
-    let mut contents = sources::humble::fetch_bundle_contents(&url).map_err(err)?;
-    if exclude_fiction {
-        contents
-            .items
-            .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
-    }
+    let contents = sources::humble::fetch_bundle_contents(&url).map_err(err)?;
     let db = state.db.lock();
     let existing = db.all_books().map_err(err)?;
     Ok(score_bundle(&existing, url, contents))
@@ -316,6 +321,8 @@ pub fn check_bundle_url(
 /// checks all of them at once -- the one-click version of
 /// `check_bundle_url` for "is anything on sale right now something I
 /// already own?" instead of finding and pasting each bundle's URL by hand.
+/// Same as `check_bundle_url`, "exclude fiction/comics" is applied
+/// client-side, so it's not a parameter here either.
 /// One bundle's fetch/parse failure is reported inline via that bundle's
 /// `error` field rather than failing the whole batch (see
 /// `sources::humble::fetch_all_active_bundles`); only a failure to list
@@ -323,7 +330,6 @@ pub fn check_bundle_url(
 #[tauri::command]
 pub fn check_active_bundles(
     state: State<AppState>,
-    exclude_fiction: bool,
 ) -> Result<Vec<BundleCheckResult>, String> {
     let exclude_terms = state.config.lock().bundle_exclude_terms.clone();
     let mut checks = sources::humble::fetch_all_active_bundles().map_err(err)?;
@@ -339,14 +345,7 @@ pub fn check_active_bundles(
     Ok(checks
         .into_iter()
         .map(|check| match check.result {
-            Ok(mut contents) => {
-                if exclude_fiction {
-                    contents
-                        .items
-                        .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
-                }
-                score_bundle(&existing, check.url, contents)
-            }
+            Ok(contents) => score_bundle(&existing, check.url, contents),
             Err(e) => BundleCheckResult {
                 url: check.url,
                 bundle_name: String::new(),

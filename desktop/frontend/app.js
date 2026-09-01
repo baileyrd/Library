@@ -390,11 +390,26 @@ document.getElementById("bundle-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") runBundleCheck();
 });
 document.getElementById("active-bundles-check-btn").addEventListener("click", runActiveBundlesCheck);
+let lastBundleCheck = null; // { type: "single", result } | { type: "active", results } | null
+
+function excludeFictionChecked() {
+  return document.getElementById("exclude-fiction").checked;
+}
+
+// Fiction/comic status is decided once server-side per item
+// (`BundleCheckItem.is_fiction_or_comic`) and shipped with every fetch;
+// toggling the checkbox just re-filters the cached result set below
+// instead of re-invoking the Tauri command, which would re-fetch every
+// bundle over the network again.
+function visibleItems(result, excludeFiction) {
+  return excludeFiction ? result.items.filter((item) => !item.is_fiction_or_comic) : result.items;
+}
 
 async function runBundleCheck() {
   const url = document.getElementById("bundle-url").value.trim();
   const results = document.getElementById("bundle-check-results");
   if (!url) {
+    lastBundleCheck = null;
     results.innerHTML = "";
     return;
   }
@@ -403,11 +418,11 @@ async function runBundleCheck() {
   btn.textContent = "Checking\u2026";
   results.innerHTML = "";
   try {
-    const excludeFiction = document.getElementById("exclude-fiction").checked;
-    const result = await invoke("check_bundle_url", { url, excludeFiction });
-    results.innerHTML = bundleResultBlock(result);
-    wireBundleCheckLinks();
+    const result = await invoke("check_bundle_url", { url });
+    lastBundleCheck = { type: "single", result };
+    renderBundleCheckResults();
   } catch (e) {
+    lastBundleCheck = null;
     results.innerHTML = `<div class="match-card">Error: ${escapeHtml(String(e))}</div>`;
   } finally {
     btn.disabled = false;
@@ -422,18 +437,11 @@ async function runActiveBundlesCheck() {
   btn.textContent = "Checking current bundles\u2026";
   results.innerHTML = `<p class="hint">Fetching every bundle currently on humblebundle.com/books\u2026 this checks each one in turn, so it can take a little while.</p>`;
   try {
-    const excludeFiction = document.getElementById("exclude-fiction").checked;
-    const bundleResults = await invoke("check_active_bundles", { excludeFiction });
-    const okResults = bundleResults.filter((r) => !r.error);
-    const ownedCount = okResults.reduce(
-      (sum, r) => sum + r.items.filter((item) => item.strong.length > 0).length,
-      0
-    );
-    let html = `<p class="hint">${bundleResults.length} bundles checked (${okResults.length} succeeded) \u2014 ${ownedCount} books across them look like ones you already own.</p>`;
-    html += bundleResults.map(bundleResultBlock).join("");
-    results.innerHTML = html;
-    wireBundleCheckLinks();
+    const bundleResults = await invoke("check_active_bundles");
+    lastBundleCheck = { type: "active", results: bundleResults };
+    renderBundleCheckResults();
   } catch (e) {
+    lastBundleCheck = null;
     results.innerHTML = `<div class="match-card">Error: ${escapeHtml(String(e))}</div>`;
   } finally {
     btn.disabled = false;
@@ -441,16 +449,40 @@ async function runActiveBundlesCheck() {
   }
 }
 
-function bundleResultBlock(result) {
+function renderBundleCheckResults() {
+  const results = document.getElementById("bundle-check-results");
+  if (!lastBundleCheck) return;
+  const excludeFiction = excludeFictionChecked();
+  if (lastBundleCheck.type === "single") {
+    results.innerHTML = bundleResultBlock(lastBundleCheck.result, excludeFiction);
+  } else {
+    const bundleResults = lastBundleCheck.results;
+    const okResults = bundleResults.filter((r) => !r.error);
+    const ownedCount = okResults.reduce(
+      (sum, r) =>
+        sum + visibleItems(r, excludeFiction).filter((item) => item.strong.length > 0).length,
+      0
+    );
+    let html = `<p class="hint">${bundleResults.length} bundles checked (${okResults.length} succeeded) \u2014 ${ownedCount} books across them look like ones you already own.</p>`;
+    html += bundleResults.map((r) => bundleResultBlock(r, excludeFiction)).join("");
+    results.innerHTML = html;
+  }
+  wireBundleCheckLinks();
+}
+
+document.getElementById("exclude-fiction").addEventListener("change", renderBundleCheckResults);
+
+function bundleResultBlock(result, excludeFiction) {
   const name = escapeHtml(result.error ? result.url : result.bundle_name);
   const openBtn = `<button type="button" class="link-btn inline bundle-open-btn" data-url="${escapeHtml(result.url)}" title="Open bundle page" aria-label="Open bundle page">\u2197</button>`;
   const header = `<h3 class="bundle-group-header"><button type="button" class="bundle-toggle-btn" aria-expanded="true"><span class="chevron">\u25be</span> ${name}</button>${openBtn}</h3>`;
   if (result.error) {
     return `<div class="bundle-group">${header}<div class="bundle-group-body"><div class="match-card">Error: ${escapeHtml(result.error)}</div></div></div>`;
   }
-  const ownedCount = result.items.filter((item) => item.strong.length > 0).length;
-  let body = `<p class="hint">${ownedCount} of ${result.items.length} books look like ones you already own.</p>`;
-  body += result.items.map(bundleItemCard).join("");
+  const items = visibleItems(result, excludeFiction);
+  const ownedCount = items.filter((item) => item.strong.length > 0).length;
+  let body = `<p class="hint">${ownedCount} of ${items.length} books look like ones you already own.</p>`;
+  body += items.map(bundleItemCard).join("");
   return `<div class="bundle-group">${header}<div class="bundle-group-body">${body}</div></div>`;
 }
 
