@@ -146,6 +146,15 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
   configured exclude term or (with the checkbox checked) is
   fiction/comic-flagged, and re-renders on checkbox toggle or
   term add/remove without a re-fetch.
+- CLI: `check-bundles --exclude-fiction` now matches the desktop app's
+  bundle-level heuristic above -- skips a whole bundle when
+  `sources::humble::is_fiction_or_comic(&bundle_name)` matches, instead of
+  filtering individual book titles within a kept bundle (same real-world
+  miss as the desktop checkbox, e.g. "Humble Comics Bundle: ..." wasn't
+  caught by its own contents' titles). `check-bundle` (the single
+  explicit-URL variant) dropped its now-meaningless `--exclude-fiction`
+  flag entirely -- filtering "the bundle" makes no sense when there's
+  only ever the one you explicitly asked for.
 ### Security
 
 <!-- ## [0.1.0] - YYYY-MM-DD

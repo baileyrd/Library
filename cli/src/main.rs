@@ -45,10 +45,7 @@ fn run() -> Result<()> {
         } => handle_add(&db, title, author, isbn, format, cover_url),
         Command::List { source, json } => handle_list(&db, source, json),
         Command::Check { query } => handle_check(&db, &query),
-        Command::CheckBundle {
-            url,
-            exclude_fiction,
-        } => handle_check_bundle(&db, &url, exclude_fiction),
+        Command::CheckBundle { url } => handle_check_bundle(&db, &url),
         Command::CheckBundles { exclude_fiction } => {
             handle_check_bundles(&db, &config, exclude_fiction)
         }
@@ -307,13 +304,8 @@ fn handle_check(db: &Db, query: &str) -> Result<()> {
     Ok(())
 }
 
-fn handle_check_bundle(db: &Db, url: &str, exclude_fiction: bool) -> Result<()> {
-    let mut contents = sources::humble::fetch_bundle_contents(url)?;
-    if exclude_fiction {
-        contents
-            .items
-            .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
-    }
+fn handle_check_bundle(db: &Db, url: &str) -> Result<()> {
+    let contents = sources::humble::fetch_bundle_contents(url)?;
     let existing = db.all_books().context("failed to load existing books")?;
     println!("{}", contents.bundle_name);
     print_bundle_check(&existing, &contents);
@@ -321,21 +313,31 @@ fn handle_check_bundle(db: &Db, url: &str, exclude_fiction: bool) -> Result<()> 
 }
 
 fn handle_check_bundles(db: &Db, config: &Config, exclude_fiction: bool) -> Result<()> {
-    let mut checks = sources::humble::fetch_all_active_bundles()?;
+    let checks = sources::humble::fetch_all_active_bundles()?;
     let discovered = checks.len();
-    checks.retain(|check| match &check.result {
-        Ok(contents) => !sources::humble::matches_excluded_bundle(
-            &contents.bundle_name,
-            &config.bundle_exclude_terms,
-        ),
-        Err(_) => true,
-    });
+    let checks: Vec<_> = checks
+        .into_iter()
+        .filter(|check| match &check.result {
+            Ok(contents) => {
+                !sources::humble::matches_excluded_bundle(
+                    &contents.bundle_name,
+                    &config.bundle_exclude_terms,
+                ) && !(exclude_fiction && sources::humble::is_fiction_or_comic(&contents.bundle_name))
+            }
+            Err(_) => true,
+        })
+        .collect();
     let excluded = discovered - checks.len();
     let existing = db.all_books().context("failed to load existing books")?;
 
     if excluded > 0 {
+        let reason = if exclude_fiction {
+            "excluded by your bundle-exclude terms and/or the fiction/comics filter"
+        } else {
+            "excluded by your bundle-exclude terms"
+        };
         println!(
-            "{} bundles currently on humblebundle.com/books ({excluded} excluded by your bundle-exclude terms)",
+            "{} bundles currently on humblebundle.com/books ({excluded} {reason})",
             checks.len()
         );
     } else {
@@ -344,14 +346,9 @@ fn handle_check_bundles(db: &Db, config: &Config, exclude_fiction: bool) -> Resu
             checks.len()
         );
     }
-    for check in &mut checks {
-        match &mut check.result {
+    for check in &checks {
+        match &check.result {
             Ok(contents) => {
-                if exclude_fiction {
-                    contents
-                        .items
-                        .retain(|item| !sources::humble::is_fiction_or_comic(&item.title));
-                }
                 println!("\n{} ({})", contents.bundle_name, check.url);
                 print_bundle_check(&existing, contents);
             }

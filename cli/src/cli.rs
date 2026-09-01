@@ -69,18 +69,14 @@ pub enum Command {
     CheckBundle {
         /// A humblebundle.com books bundle URL, e.g. https://www.humblebundle.com/books/<slug>.
         url: String,
-
-        /// Skip books that look like fiction or a comic/graphic novel (best-effort
-        /// title match -- Humble Bundle exposes no genre data to check against).
-        #[arg(long)]
-        exclude_fiction: bool,
     },
 
     /// Discover every bundle currently on humblebundle.com/books and check all of them.
     /// Bundles matching a `config bundle-exclude-add` term are skipped entirely.
     CheckBundles {
-        /// Skip books that look like fiction or a comic/graphic novel (best-effort
-        /// title match -- Humble Bundle exposes no genre data to check against).
+        /// Skip whole bundles whose own name looks like fiction or a comic/graphic
+        /// novel (best-effort bundle-name match -- Humble Bundle exposes no genre
+        /// data to check against).
         #[arg(long)]
         exclude_fiction: bool,
     },
